@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Feud — Results</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="results">
+
+  <main id="results-container">
+
+    <div id="winner-banner" aria-live="polite">
+      <!-- Winner announcement rendered dynamically by renderResults() -->
+    </div>
+
+    <div id="scores-container">
+      <div class="score-panel" id="team1-result" aria-label="Team 1 final score">
+        <span class="score-team-label">TEAM 1</span>
+        <span class="score-value" id="team1-final-score" aria-live="polite"></span>
+      </div>
+      <div class="score-panel" id="team2-result" aria-label="Team 2 final score">
+        <span class="score-team-label">TEAM 2</span>
+        <span class="score-value" id="team2-final-score" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <p id="error-msg" hidden>
+      Scores could not be retrieved. <a href="index.html">Return to Setup Page</a>
+    </p>
+
+    <button id="play-again-btn" hidden>Play Again</button>
+
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

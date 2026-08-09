@@ -1,0 +1,457 @@
+/* ==========================================================================
+   Family Feud Game — Main Stylesheet
+   Shared by index.html (Setup Page) and game.html (Game Page)
+   ========================================================================== */
+
+/* ==========================================================================
+   1. CSS Custom Properties (Design Tokens)
+   ========================================================================== */
+
+:root {
+  --bg:               #0d0d0d;
+  --panel-bg:         #1a1a2e;
+  --slot-hidden:      #16213e;
+  --slot-revealed:    #e94560;
+  --text-primary:     #f5f5f5;
+  --text-secondary:   #cccccc;
+  --active-border:    #f5c518;
+  --strike-active:    #e94560;
+  --strike-inactive:  #444;
+}
+
+/* ==========================================================================
+   2. Reset & Base Styles
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* ==========================================================================
+   3. Layout Primitives
+   ========================================================================== */
+
+/* Page-level wrapper — constrain width and center content */
+.page-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+}
+
+/* Generic stack — vertical rhythm between direct children */
+.stack > * + * {
+  margin-top: 1rem;
+}
+
+/* Horizontal cluster — flex row with wrapping */
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* ==========================================================================
+   4. Setup Page — Session Panels
+   ========================================================================== */
+
+/* Outer wrapper for the session list */
+#sessions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0 0 1rem;
+}
+
+/* Individual session card */
+.session-panel {
+  background: var(--panel-bg);
+  border: 2px solid var(--active-border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin: 0;
+}
+
+/* Session panel header row (title + delete button) */
+.session-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.875rem;
+}
+
+/* Session title label */
+.session-panel__title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Question input within a session panel */
+.session-panel__question {
+  width: 100%;
+  margin-bottom: 0.875rem;
+}
+
+/* Answer list container */
+.session-panel__answers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Individual answer row */
+.answer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Answer row label (1., 2., …) */
+.answer-row__label {
+  min-width: 2rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   5. Setup Page — Validation & Sticky Footer
+   ========================================================================== */
+
+/* Validation message container */
+#validation-area {
+  min-height: 1.5rem;
+  padding: 0 0 0.5rem;
+}
+
+/* Individual validation error line */
+.validation-message {
+  color: var(--strike-active);
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.validation-message::before {
+  content: "⚠";
+  flex-shrink: 0;
+}
+
+/* Sticky footer — Start Game button area */
+#sticky-footer {
+  position: sticky;
+  bottom: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1.5rem;
+  /* Subtle backdrop so button stays readable over scrolled content */
+  background: linear-gradient(transparent, var(--bg) 40%);
+  pointer-events: none; /* let clicks pass through the gradient area */
+}
+
+#sticky-footer > * {
+  pointer-events: auto; /* restore click target for actual children */
+}
+
+/* ==========================================================================
+   6. Game Page — Answer Board & Slots
+   ========================================================================== */
+
+/* Left and right column grid containers for answer slots */
+.col-left,
+.col-right {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+/* Individual answer slot — hidden state (default) */
+.answer-slot {
+  min-height: 60px;
+  font-size: 1.25rem;
+  background-color: var(--slot-hidden);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  user-select: none;
+}
+
+/* Answer slot — revealed state */
+.answer-slot.revealed {
+  background-color: var(--slot-revealed);
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   7. Game Page — Bottom Bar
+   ========================================================================== */
+
+/* Sticky bottom bar — stays visible at viewport bottom while board scrolls */
+#bottom-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--panel-bg);
+  border-top: 2px solid var(--strike-inactive);
+}
+
+/* ==========================================================================
+   8. Game Page — Team Panels & Score Display
+   ========================================================================== */
+
+/* Team panel — default inactive state */
+.team-panel {
+  background: var(--panel-bg);
+  border: 2px solid var(--strike-inactive);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 7rem;
+  user-select: none;
+}
+
+/* Team panel — active (currently playing) team highlighted with gold border */
+.team-panel.active {
+  border-color: var(--active-border);
+  box-shadow: 0 0 0 2px var(--active-border);
+}
+
+/* Team name label inside panel */
+.team-panel__name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Score value inside panel — Requirements 8.2 */
+.team-panel__score {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+/* ==========================================================================
+   9. Game Page — Strike Indicators
+   ========================================================================== */
+
+/* Strike indicator container */
+.strike-container {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+/* Individual strike slot — inactive (grey outline) */
+.strike-slot {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid var(--strike-inactive);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: transparent;          /* hide the X glyph when inactive */
+  user-select: none;
+}
+
+/* Strike slot — active (red X) */
+.strike-slot.active {
+  border-color: var(--strike-active);
+  background-color: var(--strike-active);
+  color: var(--text-primary);  /* show the X glyph */
+}
+
+/* ==========================================================================
+   10. Game Page — Timer Display
+   ========================================================================== */
+
+/* Timer display — monospace, centered in bottom bar */
+#timer-display {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 5ch;
+  text-align: center;
+  letter-spacing: 0.05em;
+  flex: 0 0 auto;
+}
+
+/* ==========================================================================
+   11. Game Page — Navigation Buttons & Question Heading
+   ========================================================================== */
+
+/* Question heading — ≥24px per Requirements 12.3 */
+#question-text {
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  text-align: center;
+  flex: 1;
+  margin: 0 1rem;
+}
+
+/* Prev / Next navigation buttons */
+#nav-prev,
+#nav-next {
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  border: 2px solid var(--active-border);
+  border-radius: 6px;
+  padding: 0.5rem 1.25rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+#nav-prev:hover:not(:disabled),
+#nav-next:hover:not(:disabled) {
+  background: var(--active-border);
+  color: var(--bg);
+}
+
+/* Dimmed disabled state — Requirements 11.6, 11.7 */
+#nav-prev:disabled,
+#nav-next:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--strike-inactive);
+}
+
+/* ==========================================================================
+   12. Game Page — Keyboard Shortcut Reference
+   ========================================================================== */
+
+/* Shortcut reference block — small secondary text inside bottom bar */
+#shortcut-ref {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  flex: 1 1 100%;           /* push to its own row when bottom bar wraps */
+  opacity: 0.8;
+}
+
+/* ==========================================================================
+   13. Accessibility — Focus Styles & ARIA
+   ========================================================================== */
+
+/* ==========================================================================
+   14. Responsive Adjustments
+   ========================================================================== */
+
+
+/* ==========================================================================
+   15. Results Page
+   ========================================================================== */
+
+/* Outer wrapper — centered, dark background, padded */
+#results-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  background: var(--bg);
+  text-align: center;
+}
+
+/* Winner announcement banner — gold, large, centered */
+#winner-banner {
+  color: #f5c518;
+  font-size: 2.5rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 2rem;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 16px rgba(245, 197, 24, 0.4);
+}
+
+/* Score panels row — side by side, centered */
+#scores-container {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+/* Individual score panel card */
+.score-panel {
+  background: var(--panel-bg);
+  border: 2px solid var(--strike-inactive);
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  text-align: center;
+  min-width: 160px;
+}
+
+/* Team label inside score panel */
+.score-team-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+/* Score value — ≥48px per Requirement 13.3 */
+.score-value {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+/* Error message — hidden by default */
+#error-msg {
+  display: none;
+  color: var(--strike-active);
+  font-size: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* Play Again button — centered below score panels */
+#play-again-btn {
+  display: inline-block;
+  margin-top: 1rem;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  border: 2px solid var(--active-border);
+  border-radius: 6px;
+  padding: 0.625rem 1.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+#play-again-btn:hover {
+  background: var(--active-border);
+  color: var(--bg);
+}

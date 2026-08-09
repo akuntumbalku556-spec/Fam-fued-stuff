@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Feud — Game Tests</title>
+  <link rel="stylesheet" href="qunit.css">
+</head>
+<body data-page="game">
+
+  <div id="qunit"></div>
+  <div id="qunit-fixture"></div>
+
+  <!-- Minimal game board DOM fixture (mirrors what gameInit() expects) -->
+  <div id="game-fixture" style="display:none">
+    <button id="nav-prev" disabled>&#9664; Prev</button>
+    <h1 id="question-text"></h1>
+    <button id="nav-next">Next &#9654;</button>
+
+    <div id="board"></div>
+    <p id="no-data-msg" hidden></p>
+
+    <div id="team1-panel" class="team-panel active">
+      <span class="team-label">TEAM 1</span>
+      <span id="team1-score" class="team-score">0</span>
+    </div>
+
+    <div id="strike-display">
+      <div class="strike-slot"></div>
+      <div class="strike-slot"></div>
+      <div class="strike-slot"></div>
+    </div>
+
+    <div id="timer-display">00:00</div>
+
+    <div id="team2-panel" class="team-panel">
+      <span class="team-label">TEAM 2</span>
+      <span id="team2-score" class="team-score">0</span>
+    </div>
+  </div>
+
+  <!-- Test dependencies -->
+  <script src="qunit.js"></script>
+  <script src="fast-check.min.js"></script>
+
+  <!-- Application under test -->
+  <script src="../js/main.js"></script>
+
+  <!-- Test suites -->
+  <script>
+    /* ==========================================================================
+       Helpers — set up a minimal gameState and board DOM for each test
+       ========================================================================== */
+
+    /**
+     * Builds a fresh gameState with the given answers and optional activeTeam,
+     * then renders hidden answer slots into #board so revealSlot can find them.
+     */
+    function setupGameState(answers, activeTeam) {
+      var session = { question: "Test question?", answers: answers };
+      gameState = buildGameState([session]);
+      if (activeTeam !== undefined) gameState.activeTeam = activeTeam;
+
+      // Render board so slot elements exist in the DOM
+      renderBoard(0);
+    }
+
+    /* ==========================================================================
+       Task 8.1 — revealSlot() unit tests
+       ========================================================================== */
+
+    QUnit.module("revealSlot", function (hooks) {
+
+      hooks.beforeEach(function () {
+        // Move game-fixture elements into qunit-fixture so they get reset each test
+        var fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML = document.getElementById("game-fixture").innerHTML;
+      });
+
+      QUnit.test("reveals a valid hidden slot — adds 'revealed' class and shows answer text", function (assert) {
+        setupGameState(["Refrigerator", "Stove", "Sink"], 0);
+        revealSlot(1);
+        var slot = document.querySelector('[data-slot="1"]');
+        assert.ok(slot.classList.contains("revealed"), "slot has 'revealed' class");
+        assert.strictEqual(slot.textContent, "Refrigerator", "slot shows the answer text");
+      });
+
+      QUnit.test("increments active team score by 1", function (assert) {
+        setupGameState(["Apple", "Banana"], 0);
+        assert.strictEqual(gameState.scores[0], 0, "team1 score starts at 0");
+        revealSlot(1);
+        assert.strictEqual(gameState.scores[0], 1, "team1 score incremented to 1");
+        assert.strictEqual(gameState.scores[1], 0, "team2 score unchanged");
+      });
+
+      QUnit.test("awards point to team 2 when team 2 is active", function (assert) {
+        setupGameState(["Alpha", "Beta"], 1);
+        revealSlot(2);
+        assert.strictEqual(gameState.scores[1], 1, "team2 score incremented");
+        assert.strictEqual(gameState.scores[0], 0, "team1 score unchanged");
+      });
+
+      QUnit.test("sets revealedSlots[n-1] = true", function (assert) {
+        setupGameState(["A", "B", "C"], 0);
+        revealSlot(2);
+        assert.strictEqual(gameState.revealedSlots[1], true, "revealedSlots[1] is true");
+        assert.strictEqual(gameState.revealedSlots[0], false, "revealedSlots[0] is still false");
+      });
+
+      QUnit.test("is idempotent — revealing an already-revealed slot does not change score (Req 6.6)", function (assert) {
+        setupGameState(["Cat", "Dog"], 0);
+        revealSlot(1);
+        assert.strictEqual(gameState.scores[0], 1, "score is 1 after first reveal");
+        revealSlot(1); // second call — should be no-op
+        assert.strictEqual(gameState.scores[0], 1, "score still 1 after second reveal");
+      });
+
+      QUnit.test("out-of-bounds slot n=0 is a no-op (Req 6.3)", function (assert) {
+        setupGameState(["X"], 0);
+        revealSlot(0);
+        assert.strictEqual(gameState.scores[0], 0, "score unchanged");
+        assert.strictEqual(gameState.revealedSlots[0], false, "slot not marked revealed");
+      });
+
+      QUnit.test("out-of-bounds slot beyond answers.length is a no-op (Req 6.3)", function (assert) {
+        setupGameState(["X", "Y"], 0); // 2 answers
+        revealSlot(3); // slot 3 doesn't exist
+        assert.strictEqual(gameState.scores[0], 0, "score unchanged");
+      });
+
+      QUnit.test("slot 10 is revealed when session has 10 answers", function (assert) {
+        var answers = ["A","B","C","D","E","F","G","H","I","J"];
+        setupGameState(answers, 0);
+        revealSlot(10);
+        assert.strictEqual(gameState.revealedSlots[9], true, "revealedSlots[9] is true");
+        var slot = document.querySelector('[data-slot="10"]');
+        assert.ok(slot.classList.contains("revealed"), "slot 10 has revealed class");
+        assert.strictEqual(slot.textContent, "J", "slot 10 shows correct answer");
+      });
+
+      QUnit.test("calls updateScoreDisplay — score DOM reflects new score", function (assert) {
+        setupGameState(["Foo"], 0);
+        revealSlot(1);
+        var displayed = document.getElementById("team1-score").textContent;
+        assert.strictEqual(displayed, "1", "team1-score element shows 1");
+      });
+
+    });
+
+    /* ==========================================================================
+       Task 8.1 — updateScoreDisplay() unit tests
+       ========================================================================== */
+
+    QUnit.module("updateScoreDisplay", function (hooks) {
+
+      hooks.beforeEach(function () {
+        var fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML = document.getElementById("game-fixture").innerHTML;
+      });
+
+      QUnit.test("writes both scores to DOM correctly", function (assert) {
+        setupGameState(["A"], 0);
+        gameState.scores[0] = 7;
+        gameState.scores[1] = 3;
+        updateScoreDisplay();
+        assert.strictEqual(document.getElementById("team1-score").textContent, "7", "team1-score is 7");
+        assert.strictEqual(document.getElementById("team2-score").textContent, "3", "team2-score is 3");
+      });
+
+      QUnit.test("writes 0 when scores are at initial values", function (assert) {
+        setupGameState(["A"], 0);
+        updateScoreDisplay();
+        assert.strictEqual(document.getElementById("team1-score").textContent, "0", "team1-score shows 0");
+        assert.strictEqual(document.getElementById("team2-score").textContent, "0", "team2-score shows 0");
+      });
+
+    });
+
+    /* ==========================================================================
+       Task 8.1 — Property 9: Reveal Awards Exactly One Point to Active Team
+       Validates: Requirements 6.5, 8.4
+       ========================================================================== */
+
+    QUnit.module("PBT — Property 9: Reveal awards exactly one point to active team", function (hooks) {
+
+      hooks.beforeEach(function () {
+        var fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML = document.getElementById("game-fixture").innerHTML;
+      });
+
+      QUnit.test("for any active team and any hidden slot, revealing adds exactly 1 to active team and 0 to the other", function (assert) {
+        if (!window.fc) {
+          assert.ok(true, "SKIPPED — fast-check not available (fast-check.min.js not found in test/)");
+          return;
+        }
+        var fc = window.fc;
+
+        fc.assert(fc.property(
+          fc.integer({ min: 0, max: 1 }),           // activeTeam: 0 or 1
+          fc.integer({ min: 1, max: 10 }),           // number of answers
+          fc.integer({ min: 0, max: 9 }),            // slot index (clamped below)
+          function (activeTeam, numAnswers, rawSlotIdx) {
+            // Set up a fresh game state
+            var answers = Array.from({ length: numAnswers }, function (_, i) {
+              return "Answer" + (i + 1);
+            });
+            setupGameState(answers, activeTeam);
+
+            var slotNumber = (rawSlotIdx % numAnswers) + 1; // 1-based, always valid
+            var scoreBefore0 = gameState.scores[0];
+            var scoreBefore1 = gameState.scores[1];
+
+            revealSlot(slotNumber);
+
+            var delta0 = gameState.scores[0] - scoreBefore0;
+            var delta1 = gameState.scores[1] - scoreBefore1;
+
+            if (activeTeam === 0) {
+              return delta0 === 1 && delta1 === 0;
+            } else {
+              return delta0 === 0 && delta1 === 1;
+            }
+          }
+        ), { numRuns: 100 });
+
+        assert.ok(true, "Property 9 passed 100 runs");
+      });
+
+    });
+
+    /* ==========================================================================
+       Task 8.1 — Property 10: Reveal Idempotence
+       Validates: Requirements 6.6
+       ========================================================================== */
+
+    QUnit.module("PBT — Property 10: Reveal Idempotence", function (hooks) {
+
+      hooks.beforeEach(function () {
+        var fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML = document.getElementById("game-fixture").innerHTML;
+      });
+
+      QUnit.test("revealing an already-revealed slot produces no score change and no visual toggle", function (assert) {
+        if (!window.fc) {
+          assert.ok(true, "SKIPPED — fast-check not available (fast-check.min.js not found in test/)");
+          return;
+        }
+        var fc = window.fc;
+
+        fc.assert(fc.property(
+          fc.integer({ min: 0, max: 1 }),       // activeTeam
+          fc.integer({ min: 1, max: 10 }),       // numAnswers
+          fc.integer({ min: 0, max: 9 }),        // slotIndex (raw)
+          function (activeTeam, numAnswers, rawSlotIdx) {
+            var answers = Array.from({ length: numAnswers }, function (_, i) {
+              return "Ans" + (i + 1);
+            });
+            setupGameState(answers, activeTeam);
+
+            var slotNumber = (rawSlotIdx % numAnswers) + 1;
+
+            // First reveal
+            revealSlot(slotNumber);
+            var scoreAfterFirst0 = gameState.scores[0];
+            var scoreAfterFirst1 = gameState.scores[1];
+            var revealedAfterFirst = gameState.revealedSlots[slotNumber - 1];
+
+            // Second reveal — must be no-op
+            revealSlot(slotNumber);
+
+            return gameState.scores[0] === scoreAfterFirst0
+              && gameState.scores[1] === scoreAfterFirst1
+              && gameState.revealedSlots[slotNumber - 1] === revealedAfterFirst;
+          }
+        ), { numRuns: 100 });
+
+        assert.ok(true, "Property 10 passed 100 runs");
+      });
+
+    });
+
+  </script>
+
+</body>
+</html>

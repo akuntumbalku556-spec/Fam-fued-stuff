@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Feud — Setup Tests</title>
+  <link rel="stylesheet" href="qunit.css">
+</head>
+<body>
+
+  <div id="qunit"></div>
+  <div id="qunit-fixture"></div>
+
+  <!-- Test dependencies -->
+  <script src="qunit.js"></script>
+  <script src="fast-check.min.js"></script>
+
+  <!-- Application under test -->
+  <script src="../js/main.js"></script>
+
+  <!-- localStorage mock: redirects all localStorage calls to an in-memory store
+       so the tests work under file:// without touching real browser storage. -->
+  <script>
+    (function () {
+      var store = {};
+      var mockStorage = {
+        getItem:    function (k)    { return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; },
+        setItem:    function (k, v) { store[k] = String(v); },
+        removeItem: function (k)    { delete store[k]; },
+        clear:      function ()     { store = {}; },
+        get length() { return Object.keys(store).length; }
+      };
+      Object.defineProperty(window, "localStorage", {
+        value: mockStorage, configurable: true, writable: true
+      });
+    })();
+  </script>
+
+  <!-- Test suite: isValidSessions unit tests (Task 3.1) -->
+  <script>
+    QUnit.module("isValidSessions", function () {
+
+      // --- Rejection cases ---
+
+      QUnit.test("returns false for non-array values", function (assert) {
+        assert.strictEqual(isValidSessions(null),      false, "null");
+        assert.strictEqual(isValidSessions(undefined), false, "undefined");
+        assert.strictEqual(isValidSessions(42),        false, "number");
+        assert.strictEqual(isValidSessions("string"),  false, "string");
+        assert.strictEqual(isValidSessions({}),        false, "plain object");
+      });
+
+      QUnit.test("returns false for an empty array", function (assert) {
+        assert.strictEqual(isValidSessions([]), false);
+      });
+
+      QUnit.test("returns false when a session is missing the question field", function (assert) {
+        assert.strictEqual(isValidSessions([{ answers: ["A"] }]), false);
+      });
+
+      QUnit.test("returns false when a session has a non-string question", function (assert) {
+        assert.strictEqual(isValidSessions([{ question: 123, answers: ["A"] }]), false);
+      });
+
+      QUnit.test("returns false when a session is missing the answers field", function (assert) {
+        assert.strictEqual(isValidSessions([{ question: "Q" }]), false);
+      });
+
+      QUnit.test("returns false when answers is not an array", function (assert) {
+        assert.strictEqual(isValidSessions([{ question: "Q", answers: "A" }]), false);
+        assert.strictEqual(isValidSessions([{ question: "Q", answers: null  }]), false);
+      });
+
+      QUnit.test("returns false when answers array is empty", function (assert) {
+        assert.strictEqual(isValidSessions([{ question: "Q", answers: [] }]), false);
+      });
+
+      QUnit.test("returns false when any answer is not a string", function (assert) {
+        assert.strictEqual(isValidSessions([{ question: "Q", answers: ["A", 2] }]),    false, "number in answers");
+        assert.strictEqual(isValidSessions([{ question: "Q", answers: [null] }]),       false, "null in answers");
+        assert.strictEqual(isValidSessions([{ question: "Q", answers: [undefined] }]), false, "undefined in answers");
+      });
+
+      QUnit.test("returns false when any session in a multi-session array is invalid", function (assert) {
+        var valid   = { question: "Q1", answers: ["A"] };
+        var invalid = { question: "Q2", answers: [] };
+        assert.strictEqual(isValidSessions([valid, invalid]), false);
+      });
+
+      // --- Acceptance cases ---
+
+      QUnit.test("returns true for a single valid session with one answer", function (assert) {
+        assert.strictEqual(isValidSessions([{ question: "Q", answers: ["A"] }]), true);
+      });
+
+      QUnit.test("returns true for a single valid session with multiple answers", function (assert) {
+        assert.strictEqual(
+          isValidSessions([{ question: "Name a fruit.", answers: ["Apple", "Banana", "Cherry"] }]),
+          true
+        );
+      });
+
+      QUnit.test("returns true for multiple valid sessions (up to 10)", function (assert) {
+        var sessions = [];
+        for (var i = 1; i <= 10; i++) {
+          sessions.push({ question: "Question " + i, answers: ["Answer " + i] });
+        }
+        assert.strictEqual(isValidSessions(sessions), true);
+      });
+
+      QUnit.test("returns false for more than 10 sessions", function (assert) {
+        var sessions = [];
+        for (var i = 1; i <= 11; i++) {
+          sessions.push({ question: "Question " + i, answers: ["Answer " + i] });
+        }
+        assert.strictEqual(isValidSessions(sessions), false);
+      });
+
+    });
+  </script>
+
+  <!-- Test suite: saveToStorage / loadFromStorage unit tests (Task 3.3) -->
+  <script>
+    QUnit.module("saveToStorage and loadFromStorage", function (hooks) {
+
+      // Reset the in-memory mock store before each test
+      hooks.beforeEach(function () {
+        localStorage.clear();
+      });
+
+      // ── saveToStorage ──────────────────────────────────────────────────────
+
+      QUnit.test("saveToStorage returns {ok:true} for a valid sessions array", function (assert) {
+        var sessions = [{ question: "Q", answers: ["A"] }];
+        var result = saveToStorage(sessions);
+        assert.strictEqual(result.ok, true, "ok flag is true");
+        assert.strictEqual(result.error, undefined, "no error property on success");
+      });
+
+      QUnit.test("saveToStorage writes JSON string to localStorage under the correct key", function (assert) {
+        var sessions = [{ question: "Name a fruit.", answers: ["Apple", "Banana"] }];
+        saveToStorage(sessions);
+        var raw = localStorage.getItem("familyFeudSessions");
+        assert.ok(typeof raw === "string", "value is a string");
+        assert.deepEqual(JSON.parse(raw), sessions, "parsed value matches input");
+      });
+
+      QUnit.test("saveToStorage preserves session order and all fields", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A", "B", "C"] },
+          { question: "Q2", answers: ["X"] }
+        ];
+        saveToStorage(sessions);
+        var stored = JSON.parse(localStorage.getItem("familyFeudSessions"));
+        assert.deepEqual(stored, sessions);
+      });
+
+      QUnit.test("saveToStorage returns {ok:false, error} when localStorage.setItem throws", function (assert) {
+        // Temporarily override setItem to throw
+        var original = localStorage.setItem;
+        localStorage.setItem = function () { throw new Error("quota exceeded"); };
+
+        var result = saveToStorage([{ question: "Q", answers: ["A"] }]);
+        assert.strictEqual(result.ok, false, "ok is false on failure");
+        assert.ok(result.error instanceof Error, "error property is an Error");
+
+        localStorage.setItem = original; // restore
+      });
+
+      // ── loadFromStorage ────────────────────────────────────────────────────
+
+      QUnit.test("loadFromStorage returns null when key is absent", function (assert) {
+        assert.strictEqual(loadFromStorage(), null);
+      });
+
+      QUnit.test("loadFromStorage returns parsed sessions when key holds valid JSON", function (assert) {
+        var sessions = [{ question: "Q", answers: ["A"] }];
+        localStorage.setItem("familyFeudSessions", JSON.stringify(sessions));
+        assert.deepEqual(loadFromStorage(), sessions);
+      });
+
+      QUnit.test("loadFromStorage returns null for malformed JSON", function (assert) {
+        localStorage.setItem("familyFeudSessions", "{ this is not valid json");
+        assert.strictEqual(loadFromStorage(), null);
+      });
+
+      QUnit.test("loadFromStorage returns null when JSON does not pass isValidSessions", function (assert) {
+        // Valid JSON but invalid schema: answers is empty
+        localStorage.setItem("familyFeudSessions", JSON.stringify([{ question: "Q", answers: [] }]));
+        assert.strictEqual(loadFromStorage(), null);
+      });
+
+      QUnit.test("loadFromStorage returns null for JSON array with more than 10 sessions", function (assert) {
+        var sessions = [];
+        for (var i = 0; i < 11; i++) {
+          sessions.push({ question: "Q" + i, answers: ["A"] });
+        }
+        localStorage.setItem("familyFeudSessions", JSON.stringify(sessions));
+        assert.strictEqual(loadFromStorage(), null);
+      });
+
+      QUnit.test("saveToStorage round-trip: loadFromStorage returns identical data", function (assert) {
+        var sessions = [
+          { question: "Name a colour.", answers: ["Red", "Blue", "Green"] },
+          { question: "Name a planet.",  answers: ["Mars", "Venus"] }
+        ];
+        saveToStorage(sessions);
+        assert.deepEqual(loadFromStorage(), sessions, "round-trip preserves data exactly");
+      });
+
+    });
+  </script>
+
+
+  <!-- Test suite: collectState, createSessionPanel, renderSessions (Task 4.1) -->
+  <script>
+    QUnit.module("createSessionPanel", function () {
+
+      QUnit.test("returns an element with data-session-index attribute", function (assert) {
+        var session = { question: "Q", answers: ["A"] };
+        var panel = createSessionPanel(session, 0);
+        assert.strictEqual(panel.dataset.sessionIndex, "0", "index 0");
+
+        var panel2 = createSessionPanel(session, 4);
+        assert.strictEqual(panel2.dataset.sessionIndex, "4", "index 4");
+      });
+
+      QUnit.test("root element has class session-panel", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A"] }, 0);
+        assert.ok(panel.classList.contains("session-panel"), "has session-panel class");
+      });
+
+      QUnit.test("contains .session-panel__header element", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A"] }, 0);
+        assert.ok(panel.querySelector(".session-panel__header"), "header present");
+      });
+
+      QUnit.test("contains .session-panel__title with correct text", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A"] }, 0);
+        var title = panel.querySelector(".session-panel__title");
+        assert.ok(title, "title element present");
+        assert.strictEqual(title.textContent, "Session 1", "1-based title for index 0");
+
+        var panel2 = createSessionPanel({ question: "Q", answers: ["A"] }, 2);
+        var title2 = panel2.querySelector(".session-panel__title");
+        assert.strictEqual(title2.textContent, "Session 3", "1-based title for index 2");
+      });
+
+      QUnit.test("contains .session-delete-btn button", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A"] }, 0);
+        assert.ok(panel.querySelector(".session-delete-btn"), "delete session button present");
+      });
+
+      QUnit.test("contains .session-panel__question wrapper", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A"] }, 0);
+        assert.ok(panel.querySelector(".session-panel__question"), "question wrapper present");
+      });
+
+      QUnit.test("contains .session-question-input with correct value and maxlength", function (assert) {
+        var panel = createSessionPanel({ question: "My Question", answers: ["A"] }, 0);
+        var input = panel.querySelector(".session-question-input");
+        assert.ok(input, "question input present");
+        assert.strictEqual(input.value, "My Question", "question value set");
+        assert.strictEqual(input.maxLength, 200, "maxlength is 200");
+      });
+
+      QUnit.test("contains .session-panel__answers wrapper", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A"] }, 0);
+        assert.ok(panel.querySelector(".session-panel__answers"), "answers wrapper present");
+      });
+
+      QUnit.test("renders correct number of answer rows with data-answer-index attributes", function (assert) {
+        var session = { question: "Q", answers: ["Ans1", "Ans2", "Ans3"] };
+        var panel = createSessionPanel(session, 0);
+        var answerInputs = panel.querySelectorAll("[data-answer-index]");
+        assert.strictEqual(answerInputs.length, 3, "three answer inputs");
+        assert.strictEqual(answerInputs[0].dataset.answerIndex, "0", "first has index 0");
+        assert.strictEqual(answerInputs[1].dataset.answerIndex, "1", "second has index 1");
+        assert.strictEqual(answerInputs[2].dataset.answerIndex, "2", "third has index 2");
+      });
+
+      QUnit.test("answer rows have class answer-row", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A", "B"] }, 0);
+        var rows = panel.querySelectorAll(".answer-row");
+        assert.strictEqual(rows.length, 2, "two answer-row elements");
+      });
+
+      QUnit.test("answer rows have .answer-row__label with 1-based text", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A", "B", "C"] }, 0);
+        var labels = panel.querySelectorAll(".answer-row__label");
+        assert.strictEqual(labels.length, 3, "three labels");
+        assert.ok(labels[0].textContent.includes("1"), "first label includes '1'");
+        assert.ok(labels[1].textContent.includes("2"), "second label includes '2'");
+        assert.ok(labels[2].textContent.includes("3"), "third label includes '3'");
+      });
+
+      QUnit.test("answer rows have .answer-delete-btn buttons", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A", "B"] }, 0);
+        var deleteBtns = panel.querySelectorAll(".answer-delete-btn");
+        assert.strictEqual(deleteBtns.length, 2, "two delete-answer buttons");
+      });
+
+      QUnit.test("contains .add-answer-btn button", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A"] }, 0);
+        assert.ok(panel.querySelector(".add-answer-btn"), "add answer button present");
+      });
+
+      QUnit.test("add-answer-btn is disabled when answers.length is 10", function (assert) {
+        var answers = ["A","B","C","D","E","F","G","H","I","J"];
+        var panel = createSessionPanel({ question: "Q", answers: answers }, 0);
+        var addBtn = panel.querySelector(".add-answer-btn");
+        assert.ok(addBtn.disabled, "add answer button is disabled at 10 answers");
+      });
+
+      QUnit.test("add-answer-btn is enabled when answers.length < 10", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: ["A", "B"] }, 0);
+        var addBtn = panel.querySelector(".add-answer-btn");
+        assert.notOk(addBtn.disabled, "add answer button is enabled when < 10 answers");
+      });
+
+      QUnit.test("creates one default empty answer row when answers array is empty", function (assert) {
+        var panel = createSessionPanel({ question: "Q", answers: [] }, 0);
+        var answerInputs = panel.querySelectorAll("[data-answer-index]");
+        assert.strictEqual(answerInputs.length, 1, "one default answer row");
+      });
+
+    });
+
+    QUnit.module("collectState", function (hooks) {
+      var fixture;
+
+      hooks.beforeEach(function () {
+        fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML = "";
+      });
+
+      QUnit.test("returns empty array when no session panels exist", function (assert) {
+        var result = collectState();
+        assert.deepEqual(result, [], "empty array with no panels");
+      });
+
+      QUnit.test("reads question and answers from a single rendered panel", function (assert) {
+        var session = { question: "Name a fruit.", answers: ["Apple", "Banana"] };
+        var panel = createSessionPanel(session, 0);
+        fixture.appendChild(panel);
+
+        var result = collectState();
+        assert.strictEqual(result.length, 1, "one session");
+        assert.strictEqual(result[0].question, "Name a fruit.", "question text");
+        assert.deepEqual(result[0].answers, ["Apple", "Banana"], "answer values");
+      });
+
+      QUnit.test("reads multiple sessions in index order", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A1"] },
+          { question: "Q2", answers: ["B1", "B2"] }
+        ];
+        sessions.forEach(function (s, i) {
+          fixture.appendChild(createSessionPanel(s, i));
+        });
+
+        var result = collectState();
+        assert.strictEqual(result.length, 2, "two sessions");
+        assert.strictEqual(result[0].question, "Q1");
+        assert.strictEqual(result[1].question, "Q2");
+        assert.strictEqual(result[1].answers.length, 2);
+      });
+    });
+
+    QUnit.module("renderSessions", function (hooks) {
+      var fixture;
+
+      hooks.beforeEach(function () {
+        // Build a minimal DOM with #sessions-container and #add-session-btn
+        fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML =
+          '<div id="sessions-container"></div>' +
+          '<button id="add-session-btn">Add Session</button>';
+      });
+
+      QUnit.test("renders one panel per session", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A"] },
+          { question: "Q2", answers: ["B"] }
+        ];
+        renderSessions(sessions);
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 2, "two session panels rendered");
+      });
+
+      QUnit.test("clears existing panels before re-rendering", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A"] }];
+        renderSessions(sessions);
+        renderSessions(sessions); // render again
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 1, "still only one panel after re-render");
+      });
+
+      QUnit.test("enables #add-session-btn when sessions < 10", function (assert) {
+        var sessions = [];
+        for (var i = 0; i < 9; i++) {
+          sessions.push({ question: "Q" + i, answers: ["A"] });
+        }
+        renderSessions(sessions);
+        var btn = document.getElementById("add-session-btn");
+        assert.notOk(btn.disabled, "button enabled at 9 sessions");
+      });
+
+      QUnit.test("disables #add-session-btn when sessions.length >= 10", function (assert) {
+        var sessions = [];
+        for (var i = 0; i < 10; i++) {
+          sessions.push({ question: "Q" + i, answers: ["A"] });
+        }
+        renderSessions(sessions);
+        var btn = document.getElementById("add-session-btn");
+        assert.ok(btn.disabled, "button disabled at 10 sessions");
+      });
+
+      QUnit.test("panels have sequential data-session-index values", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A"] },
+          { question: "Q2", answers: ["B"] },
+          { question: "Q3", answers: ["C"] }
+        ];
+        renderSessions(sessions);
+        var panels = document.querySelectorAll("[data-session-index]");
+        for (var i = 0; i < panels.length; i++) {
+          assert.strictEqual(panels[i].dataset.sessionIndex, String(i), "index " + i);
+        }
+      });
+    });
+  </script>
+
+  <!-- Test suite: addSession / deleteSession (Task 4.2) -->
+  <script>
+    QUnit.module("addSession and deleteSession", function (hooks) {
+      var fixture;
+
+      hooks.beforeEach(function () {
+        localStorage.clear();
+        fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML =
+          '<div id="sessions-container"></div>' +
+          '<button id="add-session-btn">Add Session</button>';
+      });
+
+      // ── addSession ─────────────────────────────────────────────────────────
+
+      QUnit.test("addSession appends a new empty session panel", function (assert) {
+        var initial = [{ question: "Q1", answers: ["A"] }];
+        renderSessions(initial);
+
+        addSession();
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 2, "two panels after addSession");
+      });
+
+      QUnit.test("newly added session has one empty answer input", function (assert) {
+        renderSessions([{ question: "Q1", answers: ["A"] }]);
+
+        addSession();
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        var newPanel = panels[1];
+        var answerInputs = newPanel.querySelectorAll("[data-answer-index]");
+        assert.strictEqual(answerInputs.length, 1, "exactly one answer input");
+        assert.strictEqual(answerInputs[0].value, "", "answer input is empty");
+      });
+
+      QUnit.test("newly added session has an empty question input", function (assert) {
+        renderSessions([{ question: "Q1", answers: ["A"] }]);
+
+        addSession();
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        var newPanel = panels[1];
+        var questionInput = newPanel.querySelector(".session-question-input");
+        assert.strictEqual(questionInput.value, "", "question input is empty");
+      });
+
+      QUnit.test("addSession saves to localStorage", function (assert) {
+        renderSessions([{ question: "Q1", answers: ["A"] }]);
+
+        addSession();
+
+        var saved = loadFromStorage();
+        assert.ok(saved !== null, "data saved to storage");
+        assert.strictEqual(saved.length, 2, "two sessions persisted");
+      });
+
+      QUnit.test("addSession is a no-op when 10 sessions already exist", function (assert) {
+        var sessions = [];
+        for (var i = 0; i < 10; i++) {
+          sessions.push({ question: "Q" + i, answers: ["A"] });
+        }
+        renderSessions(sessions);
+
+        addSession();
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 10, "still 10 panels — no extra panel added");
+      });
+
+      QUnit.test("addSession keeps #add-session-btn disabled at 10 sessions", function (assert) {
+        var sessions = [];
+        for (var i = 0; i < 9; i++) {
+          sessions.push({ question: "Q" + i, answers: ["A"] });
+        }
+        renderSessions(sessions);
+
+        addSession(); // now 10
+
+        var btn = document.getElementById("add-session-btn");
+        assert.ok(btn.disabled, "button disabled at 10 sessions");
+      });
+
+      // ── deleteSession ──────────────────────────────────────────────────────
+
+      QUnit.test("deleteSession removes the panel at the given index", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A"] },
+          { question: "Q2", answers: ["B"] },
+          { question: "Q3", answers: ["C"] }
+        ];
+        renderSessions(sessions);
+
+        deleteSession(1); // remove middle
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 2, "two panels remain");
+      });
+
+      QUnit.test("deleteSession re-indexes remaining panels sequentially", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A"] },
+          { question: "Q2", answers: ["B"] },
+          { question: "Q3", answers: ["C"] }
+        ];
+        renderSessions(sessions);
+
+        deleteSession(0); // remove first
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels[0].dataset.sessionIndex, "0", "first panel index is 0");
+        assert.strictEqual(panels[1].dataset.sessionIndex, "1", "second panel index is 1");
+      });
+
+      QUnit.test("deleteSession preserves question data of remaining sessions", function (assert) {
+        var sessions = [
+          { question: "Keep me",   answers: ["A"] },
+          { question: "Delete me", answers: ["B"] }
+        ];
+        renderSessions(sessions);
+
+        deleteSession(1);
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        var q = panels[0].querySelector(".session-question-input").value;
+        assert.strictEqual(q, "Keep me", "remaining question text is preserved");
+      });
+
+      QUnit.test("deleteSession saves updated sessions to localStorage", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A"] },
+          { question: "Q2", answers: ["B"] }
+        ];
+        renderSessions(sessions);
+
+        deleteSession(0);
+
+        var saved = loadFromStorage();
+        assert.ok(saved !== null, "data saved");
+        assert.strictEqual(saved.length, 1, "one session persisted");
+        assert.strictEqual(saved[0].question, "Q2", "correct session remains");
+      });
+
+      QUnit.test("deleteSession is a no-op when only 1 session remains", function (assert) {
+        renderSessions([{ question: "Only one", answers: ["A"] }]);
+
+        deleteSession(0);
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 1, "panel not removed");
+      });
+
+      QUnit.test("delete button is disabled when only 1 session is rendered", function (assert) {
+        renderSessions([{ question: "Q1", answers: ["A"] }]);
+
+        var deleteBtn = document.querySelector(".session-delete-btn");
+        assert.ok(deleteBtn.disabled, "delete button is disabled with 1 session");
+      });
+
+      QUnit.test("delete buttons are enabled when 2+ sessions are rendered", function (assert) {
+        renderSessions([
+          { question: "Q1", answers: ["A"] },
+          { question: "Q2", answers: ["B"] }
+        ]);
+
+        var deleteBtns = document.querySelectorAll(".session-delete-btn");
+        deleteBtns.forEach(function (btn) {
+          assert.notOk(btn.disabled, "delete button enabled with 2+ sessions");
+        });
+      });
+
+    });
+  </script>
+
+  <!-- Test suite: addAnswer / deleteAnswer (Task 4.3) -->
+  <script>
+    QUnit.module("addAnswer and deleteAnswer", function (hooks) {
+      var fixture;
+
+      hooks.beforeEach(function () {
+        localStorage.clear();
+        fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML =
+          '<div id="sessions-container"></div>' +
+          '<button id="add-session-btn">Add Session</button>';
+      });
+
+      // ── addAnswer ──────────────────────────────────────────────────────────
+
+      QUnit.test("addAnswer appends an empty answer input to the session", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A"] }];
+        renderSessions(sessions);
+
+        addAnswer(0);
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var answerInputs = panel.querySelectorAll("[data-answer-index]");
+        assert.strictEqual(answerInputs.length, 2, "two answer inputs after addAnswer");
+        assert.strictEqual(answerInputs[1].value, "", "newly added answer is empty");
+      });
+
+      QUnit.test("addAnswer labels remain sequential after adding", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A", "B"] }];
+        renderSessions(sessions);
+
+        addAnswer(0);
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var labels = panel.querySelectorAll(".answer-row__label");
+        assert.strictEqual(labels.length, 3, "three labels");
+        assert.ok(labels[0].textContent.includes("1"), "label 1");
+        assert.ok(labels[1].textContent.includes("2"), "label 2");
+        assert.ok(labels[2].textContent.includes("3"), "label 3");
+      });
+
+      QUnit.test("addAnswer saves updated session to localStorage", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A"] }];
+        renderSessions(sessions);
+
+        addAnswer(0);
+
+        var saved = loadFromStorage();
+        assert.ok(saved !== null, "data saved");
+        assert.strictEqual(saved[0].answers.length, 2, "two answers persisted");
+      });
+
+      QUnit.test("addAnswer is a no-op when the session already has 10 answers", function (assert) {
+        var answers = ["A","B","C","D","E","F","G","H","I","J"];
+        var sessions = [{ question: "Q1", answers: answers }];
+        renderSessions(sessions);
+
+        addAnswer(0);
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var answerInputs = panel.querySelectorAll("[data-answer-index]");
+        assert.strictEqual(answerInputs.length, 10, "still 10 answers — no extra added");
+      });
+
+      QUnit.test("addAnswer disables the add-answer-btn at 10 answers", function (assert) {
+        var answers = ["A","B","C","D","E","F","G","H","I"];
+        var sessions = [{ question: "Q1", answers: answers }];
+        renderSessions(sessions);
+
+        addAnswer(0); // reaches 10
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var addBtn = panel.querySelector(".add-answer-btn");
+        assert.ok(addBtn.disabled, "add-answer-btn disabled at 10 answers");
+      });
+
+      QUnit.test("addAnswer targets the correct session when multiple sessions exist", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A"] },
+          { question: "Q2", answers: ["X", "Y"] }
+        ];
+        renderSessions(sessions);
+
+        addAnswer(1); // add to second session
+
+        var panel0 = document.querySelector("[data-session-index='0']");
+        var panel1 = document.querySelector("[data-session-index='1']");
+        assert.strictEqual(panel0.querySelectorAll("[data-answer-index]").length, 1, "session 0 unchanged");
+        assert.strictEqual(panel1.querySelectorAll("[data-answer-index]").length, 3, "session 1 has 3 answers");
+      });
+
+      // ── deleteAnswer ───────────────────────────────────────────────────────
+
+      QUnit.test("deleteAnswer removes the answer at the given index", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A", "B", "C"] }];
+        renderSessions(sessions);
+
+        deleteAnswer(0, 1); // delete "B"
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var answerInputs = panel.querySelectorAll("[data-answer-index]");
+        assert.strictEqual(answerInputs.length, 2, "two answers remain");
+        assert.strictEqual(answerInputs[0].value, "A", "first answer unchanged");
+        assert.strictEqual(answerInputs[1].value, "C", "third answer shifted up");
+      });
+
+      QUnit.test("deleteAnswer re-sequences labels sequentially after deletion", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A", "B", "C", "D"] }];
+        renderSessions(sessions);
+
+        deleteAnswer(0, 1); // delete index 1 ("B"), leaving A, C, D
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var labels = panel.querySelectorAll(".answer-row__label");
+        assert.strictEqual(labels.length, 3, "three labels remain");
+        assert.ok(labels[0].textContent.includes("1"), "label 1");
+        assert.ok(labels[1].textContent.includes("2"), "label 2 (no gap)");
+        assert.ok(labels[2].textContent.includes("3"), "label 3");
+      });
+
+      QUnit.test("deleteAnswer re-sequences labels when first answer is deleted", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A", "B", "C"] }];
+        renderSessions(sessions);
+
+        deleteAnswer(0, 0); // delete first
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var labels = panel.querySelectorAll(".answer-row__label");
+        assert.ok(labels[0].textContent.includes("1"), "first remaining label is 1");
+        assert.ok(labels[1].textContent.includes("2"), "second remaining label is 2");
+      });
+
+      QUnit.test("deleteAnswer re-sequences labels when last answer is deleted", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A", "B", "C"] }];
+        renderSessions(sessions);
+
+        deleteAnswer(0, 2); // delete last
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var labels = panel.querySelectorAll(".answer-row__label");
+        assert.strictEqual(labels.length, 2, "two labels remain");
+        assert.ok(labels[0].textContent.includes("1"), "label 1");
+        assert.ok(labels[1].textContent.includes("2"), "label 2");
+      });
+
+      QUnit.test("deleteAnswer saves updated session to localStorage", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["A", "B"] }];
+        renderSessions(sessions);
+
+        deleteAnswer(0, 0);
+
+        var saved = loadFromStorage();
+        assert.ok(saved !== null, "data saved");
+        assert.strictEqual(saved[0].answers.length, 1, "one answer persisted");
+        assert.strictEqual(saved[0].answers[0], "B", "correct answer remains");
+      });
+
+      QUnit.test("deleteAnswer is a no-op when only 1 answer remains", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["Only"] }];
+        renderSessions(sessions);
+
+        deleteAnswer(0, 0);
+
+        var panel = document.querySelector("[data-session-index='0']");
+        var answerInputs = panel.querySelectorAll("[data-answer-index]");
+        assert.strictEqual(answerInputs.length, 1, "answer not removed");
+        assert.strictEqual(answerInputs[0].value, "Only", "remaining answer value intact");
+      });
+
+      QUnit.test("deleteAnswer targets the correct session when multiple sessions exist", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A", "B"] },
+          { question: "Q2", answers: ["X", "Y", "Z"] }
+        ];
+        renderSessions(sessions);
+
+        deleteAnswer(1, 1); // delete "Y" from session 1
+
+        var panel0 = document.querySelector("[data-session-index='0']");
+        var panel1 = document.querySelector("[data-session-index='1']");
+        assert.strictEqual(panel0.querySelectorAll("[data-answer-index]").length, 2, "session 0 unchanged");
+        assert.strictEqual(panel1.querySelectorAll("[data-answer-index]").length, 2, "session 1 has 2 answers");
+      });
+
+    });
+  </script>
+
+  <!-- Test suite: validateSessions (Task 4.5) -->
+  <script>
+    QUnit.module("validateSessions", function () {
+
+      // ── Empty array (always valid) ─────────────────────────────────────────
+
+      QUnit.test("returns empty array for an empty sessions list", function (assert) {
+        assert.deepEqual(validateSessions([]), [], "no sessions = no errors");
+      });
+
+      // ── Valid sessions ─────────────────────────────────────────────────────
+
+      QUnit.test("returns empty array for a single fully valid session", function (assert) {
+        var sessions = [{ question: "Name a fruit.", answers: ["Apple", "Banana"] }];
+        assert.deepEqual(validateSessions(sessions), []);
+      });
+
+      QUnit.test("returns empty array for multiple valid sessions", function (assert) {
+        var sessions = [
+          { question: "Q1", answers: ["A"] },
+          { question: "Q2", answers: ["X", "Y"] }
+        ];
+        assert.deepEqual(validateSessions(sessions), []);
+      });
+
+      QUnit.test("treats answers with non-empty text as valid (whitespace-only answers ignored when at least one is non-empty)", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["  ", "Valid answer"] }];
+        assert.deepEqual(validateSessions(sessions), [], "one non-empty answer is sufficient");
+      });
+
+      // ── Empty question ─────────────────────────────────────────────────────
+
+      QUnit.test("returns error when question is empty string", function (assert) {
+        var sessions = [{ question: "", answers: ["A"] }];
+        var errors = validateSessions(sessions);
+        assert.strictEqual(errors.length, 1, "one error");
+        assert.ok(errors[0].indexOf("Session 1") !== -1, "error references session number");
+        assert.ok(errors[0].indexOf("question") !== -1, "error mentions question");
+      });
+
+      QUnit.test("returns error when question is whitespace-only", function (assert) {
+        var sessions = [{ question: "   ", answers: ["A"] }];
+        var errors = validateSessions(sessions);
+        assert.strictEqual(errors.length, 1, "one error for whitespace-only question");
+      });
+
+      // ── All answers empty ──────────────────────────────────────────────────
+
+      QUnit.test("returns error when all answers are empty strings", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["", ""] }];
+        var errors = validateSessions(sessions);
+        assert.strictEqual(errors.length, 1, "one error");
+        assert.ok(errors[0].indexOf("Session 1") !== -1, "error references session number");
+        assert.ok(errors[0].indexOf("answer") !== -1, "error mentions answer");
+      });
+
+      QUnit.test("returns error when all answers are whitespace-only", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["   ", "\t", "  "] }];
+        var errors = validateSessions(sessions);
+        assert.strictEqual(errors.length, 1, "one error for whitespace-only answers");
+      });
+
+      // ── Both violations in same session ───────────────────────────────────
+
+      QUnit.test("returns two errors when a session has both empty question and all-empty answers", function (assert) {
+        var sessions = [{ question: "", answers: [""] }];
+        var errors = validateSessions(sessions);
+        assert.strictEqual(errors.length, 2, "two errors — one for question, one for answers");
+      });
+
+      // ── Multiple sessions — errors for correct session numbers ─────────────
+
+      QUnit.test("labels errors with correct 1-based session number", function (assert) {
+        var sessions = [
+          { question: "Valid Q", answers: ["A"] },   // valid
+          { question: "",        answers: ["A"] },   // invalid question — session 2
+          { question: "Q3",      answers: [""] }     // invalid answers  — session 3
+        ];
+        var errors = validateSessions(sessions);
+        assert.strictEqual(errors.length, 2, "two errors total");
+        assert.ok(errors[0].indexOf("Session 2") !== -1, "first error is for session 2");
+        assert.ok(errors[1].indexOf("Session 3") !== -1, "second error is for session 3");
+      });
+
+      QUnit.test("accumulates errors for all invalid sessions", function (assert) {
+        var sessions = [
+          { question: "", answers: [""] },
+          { question: "", answers: [""] }
+        ];
+        var errors = validateSessions(sessions);
+        assert.strictEqual(errors.length, 4, "four errors — two per invalid session");
+      });
+
+    });
+  </script>
+
+  <!-- Test suite: handleStartGame (Task 4.7) -->
+  <script>
+    QUnit.module("handleStartGame", function (hooks) {
+      var fixture;
+      var originalLocation;
+
+      hooks.beforeEach(function () {
+        localStorage.clear();
+        fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML =
+          '<div id="sessions-container"></div>' +
+          '<button id="add-session-btn">Add Session</button>' +
+          '<section id="validation-area"></section>' +
+          '<footer id="sticky-footer"></footer>';
+
+        // Capture navigation attempts without actually navigating
+        originalLocation = Object.getOwnPropertyDescriptor(window, "location");
+        try {
+          Object.defineProperty(window, "location", {
+            value: { href: "", assign: function(url) { this._navigatedTo = url; } },
+            configurable: true,
+            writable: true
+          });
+          window.location._navigatedTo = null;
+        } catch (e) {
+          // Some browsers don't allow redefining window.location; skip navigation checks
+        }
+      });
+
+      hooks.afterEach(function () {
+        try {
+          if (originalLocation) {
+            Object.defineProperty(window, "location", originalLocation);
+          }
+        } catch (e) { /* ignore */ }
+      });
+
+      QUnit.test("renders one .validation-message per error when sessions are invalid", function (assert) {
+        // Render two invalid sessions
+        var sessions = [
+          { question: "",   answers: [""] },  // missing question + no answers → 2 errors
+          { question: "Q2", answers: [""] }   // no answers → 1 error
+        ];
+        renderSessions(sessions);
+
+        handleStartGame();
+
+        var messages = document.querySelectorAll(".validation-message");
+        assert.strictEqual(messages.length, 3, "three validation messages for three errors");
+      });
+
+      QUnit.test("clears previous validation messages before showing new ones", function (assert) {
+        var sessions = [{ question: "", answers: ["A"] }];
+        renderSessions(sessions);
+
+        handleStartGame(); // first call — shows 1 error
+        handleStartGame(); // second call — should still show 1 error, not 2
+
+        var messages = document.querySelectorAll(".validation-message");
+        assert.strictEqual(messages.length, 1, "only one message — old messages cleared");
+      });
+
+      QUnit.test("saves to localStorage when all sessions are valid", function (assert) {
+        var sessions = [{ question: "Q1", answers: ["Answer A"] }];
+        renderSessions(sessions);
+
+        // Intercept navigation so the test doesn't fail on window.location assignment
+        var navigated = false;
+        var origWindowLocation = window.location;
+        try {
+          Object.defineProperty(window, "location", {
+            set: function () { navigated = true; },
+            get: function () { return origWindowLocation; },
+            configurable: true
+          });
+        } catch (e) { /* ignore if not settable */ }
+
+        handleStartGame();
+
+        var saved = loadFromStorage();
+        assert.ok(saved !== null, "sessions were saved to localStorage");
+        assert.strictEqual(saved[0].question, "Q1", "correct question persisted");
+      });
+
+      QUnit.test("does not save to localStorage when there are validation errors", function (assert) {
+        var sessions = [{ question: "", answers: [""] }];
+        renderSessions(sessions);
+
+        handleStartGame();
+
+        var saved = loadFromStorage();
+        // loadFromStorage returns null if nothing has been saved or data is invalid
+        // The key point: invalid sessions should not be written as valid data
+        var messages = document.querySelectorAll(".validation-message");
+        assert.ok(messages.length > 0, "validation errors shown — navigation blocked");
+      });
+
+      QUnit.test("renders no validation messages when sessions are valid", function (assert) {
+        var sessions = [{ question: "Valid Q", answers: ["Valid Answer"] }];
+        renderSessions(sessions);
+
+        // Intercept navigation
+        try {
+          Object.defineProperty(window, "location", {
+            set: function () { /* no-op */ },
+            get: function () { return {}; },
+            configurable: true
+          });
+        } catch (e) { /* ignore */ }
+
+        handleStartGame();
+
+        var messages = document.querySelectorAll(".validation-message");
+        assert.strictEqual(messages.length, 0, "no validation messages on valid input");
+      });
+
+    });
+  </script>
+
+  <!-- Test suite: setupInit (Task 4.7) -->
+  <script>
+    QUnit.module("setupInit", function (hooks) {
+      var fixture;
+
+      hooks.beforeEach(function () {
+        localStorage.clear();
+        fixture = document.getElementById("qunit-fixture");
+        fixture.innerHTML =
+          '<main>' +
+          '  <section id="controls-bar"></section>' +
+          '  <section id="sessions-container"></section>' +
+          '  <section id="validation-area"></section>' +
+          '</main>' +
+          '<footer id="sticky-footer"></footer>';
+      });
+
+      QUnit.test("renders one default session panel when localStorage is empty", function (assert) {
+        setupInit();
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 1, "one default session panel rendered");
+      });
+
+      QUnit.test("restores saved sessions from localStorage", function (assert) {
+        var sessions = [
+          { question: "Saved Q1", answers: ["A", "B"] },
+          { question: "Saved Q2", answers: ["X"] }
+        ];
+        saveToStorage(sessions);
+
+        setupInit();
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 2, "two panels restored from localStorage");
+        var q1 = panels[0].querySelector(".session-question-input").value;
+        assert.strictEqual(q1, "Saved Q1", "first session question restored");
+      });
+
+      QUnit.test("injects #add-session-btn into #controls-bar", function (assert) {
+        setupInit();
+        var btn = document.getElementById("add-session-btn");
+        assert.ok(btn, "#add-session-btn exists");
+        assert.strictEqual(btn.textContent, "Add Session", "button text is correct");
+        var controlsBar = document.getElementById("controls-bar");
+        assert.ok(controlsBar.contains(btn), "button is inside #controls-bar");
+      });
+
+      QUnit.test("injects #start-game-btn into #sticky-footer", function (assert) {
+        setupInit();
+        var btn = document.getElementById("start-game-btn");
+        assert.ok(btn, "#start-game-btn exists");
+        assert.strictEqual(btn.textContent, "Start Game", "button text is correct");
+        var footer = document.getElementById("sticky-footer");
+        assert.ok(footer.contains(btn), "button is inside #sticky-footer");
+      });
+
+      QUnit.test("does not inject duplicate buttons on repeated calls", function (assert) {
+        setupInit();
+        setupInit(); // call again
+
+        var addBtns = document.querySelectorAll("#add-session-btn");
+        var startBtns = document.querySelectorAll("#start-game-btn");
+        assert.strictEqual(addBtns.length, 1, "only one #add-session-btn");
+        assert.strictEqual(startBtns.length, 1, "only one #start-game-btn");
+      });
+
+      QUnit.test("#add-session-btn is disabled when 10 sessions are loaded", function (assert) {
+        var sessions = [];
+        for (var i = 0; i < 10; i++) {
+          sessions.push({ question: "Q" + i, answers: ["A"] });
+        }
+        saveToStorage(sessions);
+
+        setupInit();
+
+        var btn = document.getElementById("add-session-btn");
+        assert.ok(btn.disabled, "#add-session-btn is disabled with 10 sessions");
+      });
+
+      QUnit.test("#add-session-btn is enabled when fewer than 10 sessions exist", function (assert) {
+        saveToStorage([{ question: "Q1", answers: ["A"] }]);
+
+        setupInit();
+
+        var btn = document.getElementById("add-session-btn");
+        assert.notOk(btn.disabled, "#add-session-btn is enabled with 1 session");
+      });
+
+      QUnit.test("clicking #add-session-btn adds a new session panel", function (assert) {
+        setupInit();
+
+        var addBtn = document.getElementById("add-session-btn");
+        addBtn.click();
+
+        var panels = document.querySelectorAll("[data-session-index]");
+        assert.strictEqual(panels.length, 2, "two panels after clicking Add Session");
+      });
+
+    });
+  </script>
+
+  <!-- Test suite: debounce (Task 4.5) -->
+  <script>
+    QUnit.module("debounce", function () {
+
+      QUnit.test("delays invocation until after the wait period", function (assert) {
+        var done = assert.async();
+        var callCount = 0;
+        var debounced = debounce(function () { callCount++; }, 50);
+
+        debounced();
+        assert.strictEqual(callCount, 0, "not called immediately");
+
+        setTimeout(function () {
+          assert.strictEqual(callCount, 1, "called once after delay");
+          done();
+        }, 100);
+      });
+
+      QUnit.test("coalesces rapid calls into a single invocation", function (assert) {
+        var done = assert.async();
+        var callCount = 0;
+        var debounced = debounce(function () { callCount++; }, 50);
+
+        debounced();
+        debounced();
+        debounced();
+
+        setTimeout(function () {
+          assert.strictEqual(callCount, 1, "only one invocation after rapid calls");
+          done();
+        }, 150);
+      });
+
+      QUnit.test("passes arguments through to the wrapped function", function (assert) {
+        var done = assert.async();
+        var received = null;
+        var debounced = debounce(function (x) { received = x; }, 30);
+
+        debounced(42);
+
+        setTimeout(function () {
+          assert.strictEqual(received, 42, "argument was passed through");
+          done();
+        }, 100);
+      });
+
+      QUnit.test("resets timer on each call so only the last call fires", function (assert) {
+        var done = assert.async();
+        var lastArg = null;
+        var debounced = debounce(function (x) { lastArg = x; }, 50);
+
+        debounced("first");
+        setTimeout(function () { debounced("last"); }, 20);
+
+        setTimeout(function () {
+          assert.strictEqual(lastArg, "last", "only the last call's argument is used");
+          done();
+        }, 150);
+      });
+
+    });
+  </script>
+
+</body>
+</html>
