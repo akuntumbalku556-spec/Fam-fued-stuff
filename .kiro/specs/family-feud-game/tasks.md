@@ -182,7 +182,7 @@ Implement a two-page offline Family Feud game using pure HTML, CSS, and Vanilla 
     - Add `#play-again-btn` button
     - _Requirements: 13.1, 13.3_
 
-  - [ ] 14.2 Add Results Page CSS
+  - [x] 14.2 Add Results Page CSS
     - Style `.score-panel` with `font-size: 3rem` (≥48px) to satisfy minimum size requirement
     - Style `.winner-banner` with gold color `#f5c518` and large font for the winner announcement
     - Style `#error-msg` as `display: none` by default
@@ -194,13 +194,13 @@ Implement a two-page offline Family Feud game using pure HTML, CSS, and Vanilla 
     - Called by `navigateSession` when the host moves past the last session
     - _Requirements: 11.6_
 
-  - [ ] 14.4 Implement `loadResults()` in `js/main.js`
+  - [x] 14.4 Implement `loadResults()` in `js/main.js`
     - Read `localStorage["familyFeudResults"]` and parse as JSON in a try/catch
     - Validate that the parsed object has numeric `team1` and `team2` fields
     - Return the data object on success, or `null` on any failure (missing key, parse error, missing/non-numeric fields)
     - _Requirements: 13.1, 13.2_
 
-  - [ ] 14.5 Implement `determineWinner(team1, team2)` and `renderResults(data)`
+  - [x] 14.5 Implement `determineWinner(team1, team2)` and `renderResults(data)`
     - `determineWinner(team1, team2)`: returns `"TEAM 1 WINS!"` when `team1 > team2`, `"TEAM 2 WINS!"` when `team2 > team1`, or `"IT'S A TIE!"` when equal
     - `renderResults(data)`: populates the two `.score-panel` elements with final scores and sets `#winner-banner` text using `determineWinner`
     - _Requirements: 13.3, 13.4, 13.5, 13.6_
@@ -210,15 +210,15 @@ Implement a two-page offline Family Feud game using pure HTML, CSS, and Vanilla 
     - For all integer pairs `(s1, s2)`: `s1 > s2` → returns `"TEAM 1 WINS!"`; `s2 > s1` → returns `"TEAM 2 WINS!"`; `s1 === s2` → returns `"IT'S A TIE!"`
     - **Validates: Requirements 13.4, 13.5, 13.6**
 
-  - [ ] 14.7 Implement `handlePlayAgain()` and `resultsInit()`
+  - [x] 14.7 Implement `handlePlayAgain()` and `resultsInit()`
     - `handlePlayAgain()`: removes `familyFeudResults` from localStorage (preserves `familyFeudSessions`); navigates to `index.html`
     - `resultsInit()`: calls `loadResults()`; if `null`, shows `#error-msg` and does NOT display scores or winner; if valid, calls `renderResults(data)` and binds the play-again button click to `handlePlayAgain()`
     - _Requirements: 13.1, 13.2, 13.7_
 
-  - [ ] 14.8 Update `init()` dispatcher to call `resultsInit()` when `document.body.dataset.page === "results"`
+  - [x] 14.8 Update `init()` dispatcher to call `resultsInit()` when `document.body.dataset.page === "results"`
     - _Requirements: 1.1_
 
-- [ ] 15. Checkpoint — Game Page complete
+- [x] 15. Checkpoint — Game Page complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 16. Set up QUnit + fast-check test harnesses
@@ -238,21 +238,21 @@ Implement a two-page offline Family Feud game using pure HTML, CSS, and Vanilla 
     - _Requirements: 1.2_
 
 - [ ] 17. Accessibility and visual polish
-  - [ ] 17.1 Add ARIA attributes and semantic markup to `index.html` and `game.html`
+  - [x] 17.1 Add ARIA attributes and semantic markup to `index.html` and `game.html`
     - Add `role="form"` / `aria-label` to session panels on setup
     - Add `aria-label` to nav buttons, strike slots, score panels, and timer display
     - Add `aria-live="polite"` to score displays and timer so screen readers announce updates
     - Ensure all interactive elements are reachable via Tab key with visible focus styles
     - _Requirements: 12.1_
 
-  - [ ] 17.2 Apply final visual polish to `css/style.css`
+  - [x] 17.2 Apply final visual polish to `css/style.css`
     - Add `:focus-visible` ring for keyboard navigation
     - Add CSS transitions for answer slot reveal (background color transition ~300ms)
     - Verify all contrast pairs meet WCAG AA ratios as defined in the design color table
     - Add responsive `@media` query to shrink font sizes slightly on viewports < 768px
     - _Requirements: 12.1, 12.3, 12.4, 6.7_
 
-- [ ] 18. Final checkpoint — All tests pass
+- [x] 18. Final checkpoint — All tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ---

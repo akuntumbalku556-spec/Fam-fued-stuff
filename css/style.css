@@ -11,7 +11,7 @@
   --bg:               #0d0d0d;
   --panel-bg:         #1a1a2e;
   --slot-hidden:      #16213e;
-  --slot-revealed:    #e94560;
+  --slot-revealed:    #2a7a3a;
   --text-primary:     #f5f5f5;
   --text-secondary:   #cccccc;
   --active-border:    #f5c518;
@@ -125,7 +125,96 @@ body {
 }
 
 /* ==========================================================================
-   5. Setup Page — Validation & Sticky Footer
+   5. Setup Page — Timer Config Panel
+   ========================================================================== */
+
+#timer-config-panel {
+  background: var(--panel-bg);
+  border: 2px solid #444;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.timer-config__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.875rem;
+}
+
+.timer-config__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+/* Count-up / Countdown radio group */
+.timer-config__mode {
+  display: flex;
+  gap: 1rem;
+}
+
+.timer-config__mode label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.timer-config__mode input[type="radio"] {
+  accent-color: var(--active-border);
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Duration inputs row (MM : SS) */
+.timer-config__duration {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.timer-config__duration label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.timer-config__duration input[type="number"] {
+  width: 4rem;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 0.3rem 0.4rem;
+  background: var(--bg);
+  color: var(--text-primary);
+  border: 2px solid #444;
+  border-radius: 5px;
+}
+
+.timer-config__duration input[type="number"]:focus {
+  border-color: var(--active-border);
+  outline: none;
+}
+
+.timer-config__colon {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+/* Hide the duration row when count-up mode is selected */
+.timer-config__duration.hidden {
+  display: none;
+}
+
+/* ==========================================================================
+   6. Setup Page — Validation & Sticky Footer
    ========================================================================== */
 
 /* Validation message container */
@@ -166,169 +255,201 @@ body {
 }
 
 /* ==========================================================================
-   6. Game Page — Answer Board & Slots
+   6. Game Page — Layout
    ========================================================================== */
 
-/* Left and right column grid containers for answer slots */
+/* Full-page game layout: block + bottom bar stacked */
+#game-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 1.25rem 1.5rem 0;
+  box-sizing: border-box;
+}
+
+/* The main game block: question header + answer board, bordered card */
+#game-block {
+  flex: 1;
+  background: var(--panel-bg);
+  border: 3px solid #333;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+/* Nav row inside the block: Prev — question — Next */
+#game-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Question heading — ≥24px per Req 12.3 */
+#question-text {
+  flex: 1;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border: 2px solid #444;
+  border-radius: 6px;
+}
+
+/* Answer board: two columns side by side when > 5 answers */
+#board {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Left and right column containers */
 .col-left,
 .col-right {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
 /* Individual answer slot — hidden state (default) */
 .answer-slot {
-  min-height: 60px;
+  min-height: 56px;
   font-size: 1.25rem;
+  font-weight: 600;
   background-color: var(--slot-hidden);
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 6px;
+  border: 2px solid #2a3a5e;
   padding: 0.5rem 1rem;
   user-select: none;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Answer slot — revealed state */
+/* Answer slot — revealed state: GREEN */
 .answer-slot.revealed {
   background-color: var(--slot-revealed);
+  border-color: #2d7a3a;
   color: var(--text-primary);
 }
 
 /* ==========================================================================
-   7. Game Page — Bottom Bar
+   7. Game Page — Bottom Bar (Team 1 | Timer | Team 2)
    ========================================================================== */
 
-/* Sticky bottom bar — stays visible at viewport bottom while board scrolls */
 #bottom-bar {
-  position: sticky;
-  bottom: 0;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.25rem;
-  background: var(--panel-bg);
-  border-top: 2px solid var(--strike-inactive);
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  margin-bottom: 0.5rem;
 }
 
-/* ==========================================================================
-   8. Game Page — Team Panels & Score Display
-   ========================================================================== */
-
-/* Team panel — default inactive state */
+/* Team panels take equal width on both sides */
 .team-panel {
+  flex: 1;
   background: var(--panel-bg);
   border: 2px solid var(--strike-inactive);
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.25rem;
-  min-width: 7rem;
   user-select: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-/* Team panel — active (currently playing) team highlighted with gold border */
+/* Active (currently playing) team: gold border + glow */
 .team-panel.active {
   border-color: var(--active-border);
   box-shadow: 0 0 0 2px var(--active-border);
 }
 
-/* Team name label inside panel */
-.team-panel__name {
-  font-size: 0.85rem;
-  font-weight: 600;
+.team-label {
+  font-size: 0.9rem;
+  font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
 }
 
-/* Score value inside panel — Requirements 8.2 */
-.team-panel__score {
-  font-size: 1.75rem;
-  font-weight: 700;
+.team-score {
+  font-size: 2.25rem;
+  font-weight: 800;
   color: var(--text-primary);
   line-height: 1;
 }
 
-/* ==========================================================================
-   9. Game Page — Strike Indicators
-   ========================================================================== */
-
-/* Strike indicator container */
-.strike-container {
-  display: flex;
-  gap: 0.375rem;
-  align-items: center;
-}
-
-/* Individual strike slot — inactive (grey outline) */
-.strike-slot {
-  width: 1.75rem;
-  height: 1.75rem;
-  border: 2px solid var(--strike-inactive);
-  border-radius: 4px;
+/* Timer — centered between the two team panels */
+#timer-display {
+  flex: 0 0 auto;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--panel-bg);
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  min-width: 7ch;
+  text-align: center;
+  letter-spacing: 0.05em;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  font-weight: 700;
-  color: transparent;          /* hide the X glyph when inactive */
-  user-select: none;
+  transition: color 0.2s, border-color 0.2s;
 }
 
-/* Strike slot — active (red X) */
-.strike-slot.active {
+/* Time-up state — red flash when countdown hits 00:00 */
+#timer-display.timer-up {
+  color: var(--strike-active);
   border-color: var(--strike-active);
-  background-color: var(--strike-active);
-  color: var(--text-primary);  /* show the X glyph */
+  animation: timerPulse 0.6s ease-in-out 3;
+}
+
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
 }
 
 /* ==========================================================================
-   10. Game Page — Timer Display
+   8. Game Page — Shortcut Reference Strip
    ========================================================================== */
 
-/* Timer display — monospace, centered in bottom bar */
-#timer-display {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  min-width: 5ch;
+#shortcut-ref {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
   text-align: center;
-  letter-spacing: 0.05em;
-  flex: 0 0 auto;
+  padding: 0.4rem 0 0.75rem;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
 }
 
 /* ==========================================================================
-   11. Game Page — Navigation Buttons & Question Heading
+   9. Game Page — Navigation Buttons
    ========================================================================== */
 
-/* Question heading — ≥24px per Requirements 12.3 */
-#question-text {
-  font-size: 1.5rem;
-  color: var(--text-primary);
-  text-align: center;
-  flex: 1;
-  margin: 0 1rem;
-}
-
-/* Prev / Next navigation buttons */
 #nav-prev,
 #nav-next {
-  background: var(--panel-bg);
+  flex-shrink: 0;
+  background: var(--bg);
   color: var(--text-primary);
   border: 2px solid var(--active-border);
   border-radius: 6px;
-  padding: 0.5rem 1.25rem;
-  font-size: 1rem;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.95rem;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, background 0.15s;
 }
 
 #nav-prev:hover:not(:disabled),
@@ -337,34 +458,95 @@ body {
   color: var(--bg);
 }
 
-/* Dimmed disabled state — Requirements 11.6, 11.7 */
 #nav-prev:disabled,
 #nav-next:disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   cursor: not-allowed;
   border-color: var(--strike-inactive);
 }
 
 /* ==========================================================================
-   12. Game Page — Keyboard Shortcut Reference
+   10. Game Page — Wrong-Answer Strike Overlay
    ========================================================================== */
 
-/* Shortcut reference block — small secondary text inside bottom bar */
-#shortcut-ref {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  flex: 1 1 100%;           /* push to its own row when bottom bar wraps */
-  opacity: 0.8;
+/*
+ * Full-screen "✗" that pops up when X is pressed, then fades out.
+ * Hidden by default; JS adds .visible to trigger the animation.
+ */
+#strike-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30vw;
+  font-weight: 900;
+  color: #e94560;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.08s ease-in;
+}
+
+#strike-overlay.visible {
+  opacity: 1;
+  pointer-events: none;
+}
+
+@keyframes strikeFlash {
+  0%   { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+#strike-overlay.flashing {
+  animation: strikeFlash 0.8s ease-out forwards;
 }
 
 /* ==========================================================================
    13. Accessibility — Focus Styles & ARIA
    ========================================================================== */
 
+/*
+ * Visible focus ring for keyboard navigation (Requirements 12.1).
+ * Uses :focus-visible so mouse users don't see the ring,
+ * but keyboard users get a clear gold outline on all interactive elements.
+ */
+:focus-visible {
+  outline: 3px solid var(--active-border);
+  outline-offset: 3px;
+}
+
+/* Remove default outline only when :focus-visible is not active */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Rounded focus ring for buttons, inputs, and links */
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--active-border);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 /* ==========================================================================
    14. Responsive Adjustments
    ========================================================================== */
+
+/* Shrink prominent text slightly on narrow viewports (< 768px) */
+@media (max-width: 768px) {
+  #question-text { font-size: 1.1rem; }
+  .answer-slot { font-size: 1rem; min-height: 44px; }
+  #winner-banner { font-size: 1.75rem; }
+  .score-value { font-size: 2rem; }
+  #bottom-bar { gap: 0.5rem; }
+  .team-score { font-size: 1.6rem; }
+  #timer-display { font-size: 1.1rem; padding: 0.5rem 0.75rem; }
+  #strike-overlay { font-size: 50vw; }
+}
 
 
 /* ==========================================================================

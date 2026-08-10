@@ -50,6 +50,48 @@ function saveToStorage(sessions) {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Timer Config Persistence
+   Key: "familyFeudTimerConfig"
+   Shape: { mode: "up"|"down", duration: number }
+     mode     — "up" = count up freely, "down" = countdown from `duration`
+     duration — total seconds for countdown (0 means no limit for count-up)
+   -------------------------------------------------------------------------- */
+
+/**
+ * Reads the timer config inputs and saves them to localStorage.
+ */
+function saveTimerConfig() {
+  try {
+    var mode = document.querySelector('input[name="timer-mode"]:checked');
+    var modeVal = mode ? mode.value : "up";
+    var mins = parseInt(document.getElementById("timer-minutes").value, 10) || 0;
+    var secs = parseInt(document.getElementById("timer-seconds").value, 10) || 0;
+    // Clamp to valid ranges
+    mins = Math.max(0, Math.min(99, mins));
+    secs = Math.max(0, Math.min(59, secs));
+    var duration = mins * 60 + secs;
+    localStorage.setItem("familyFeudTimerConfig", JSON.stringify({ mode: modeVal, duration: duration }));
+  } catch (e) { /* ignore */ }
+}
+
+/**
+ * Loads the timer config from localStorage.
+ * Returns { mode: "up"|"down", duration: number } or a safe default.
+ */
+function loadTimerConfig() {
+  try {
+    var raw = localStorage.getItem("familyFeudTimerConfig");
+    if (!raw) return { mode: "up", duration: 60 };
+    var data = JSON.parse(raw);
+    if (data.mode !== "up" && data.mode !== "down") data.mode = "up";
+    if (typeof data.duration !== "number" || data.duration < 0) data.duration = 60;
+    return data;
+  } catch (e) {
+    return { mode: "up", duration: 60 };
+  }
+}
+
 /**
  * Loads and validates sessions from localStorage.
  *
@@ -479,6 +521,7 @@ function handleStartGame() {
 
   // No errors: save then navigate
   saveToStorage(sessions);
+  saveTimerConfig();
   window.location = "game.html";
 }
 
@@ -557,6 +600,49 @@ function setupInit() {
   if (addBtn) {
     addBtn.disabled = sessions.length >= 10;
   }
+
+  // --- Timer Config ---
+  // Restore saved timer config into the panel inputs
+  var savedTimer = loadTimerConfig();
+  var modeUpEl   = document.getElementById("timer-mode-up");
+  var modeDownEl = document.getElementById("timer-mode-down");
+  var minsEl     = document.getElementById("timer-minutes");
+  var secsEl     = document.getElementById("timer-seconds");
+  var durationRow = document.getElementById("timer-duration-row");
+
+  if (modeUpEl && modeDownEl) {
+    if (savedTimer.mode === "down") {
+      modeDownEl.checked = true;
+    } else {
+      modeUpEl.checked = true;
+    }
+  }
+
+  if (minsEl && secsEl) {
+    minsEl.value = Math.floor(savedTimer.duration / 60);
+    secsEl.value = savedTimer.duration % 60;
+  }
+
+  // Show/hide duration row based on current mode
+  function updateDurationRowVisibility() {
+    var checked = document.querySelector('input[name="timer-mode"]:checked');
+    if (durationRow) {
+      durationRow.classList.toggle("hidden", checked && checked.value === "up");
+    }
+  }
+  updateDurationRowVisibility();
+
+  // Save on any change to the timer config inputs
+  var timerConfigPanel = document.getElementById("timer-config-panel");
+  if (timerConfigPanel) {
+    timerConfigPanel.addEventListener("change", function () {
+      updateDurationRowVisibility();
+      saveTimerConfig();
+    });
+    timerConfigPanel.addEventListener("input", function () {
+      saveTimerConfig();
+    });
+  }
 }
 
 /* ==========================================================================
@@ -565,6 +651,38 @@ function setupInit() {
 
 /** Module-level game state — populated by gameInit() via buildGameState(). */
 var gameState;
+
+/* --------------------------------------------------------------------------
+   Sound Effects
+   -------------------------------------------------------------------------- */
+
+/**
+ * Plays the correct answer sound effect.
+ */
+function playCorrectSound() {
+  try {
+    var audio = new Audio('sfx/Correct.wav');
+    audio.play().catch(function(error) {
+      console.log('Could not play correct sound:', error);
+    });
+  } catch (e) {
+    console.log('Error loading correct sound:', e);
+  }
+}
+
+/**
+ * Plays the wrong answer sound effect.
+ */
+function playWrongSound() {
+  try {
+    var audio = new Audio('sfx/Wrong.mp3');
+    audio.play().catch(function(error) {
+      console.log('Could not play wrong sound:', error);
+    });
+  } catch (e) {
+    console.log('Error loading wrong sound:', e);
+  }
+}
 
 /**
  * Reads and validates sessions from localStorage for the Game Page.
@@ -609,6 +727,7 @@ function loadSessions() {
  * @returns {Object} Initial game state.
  */
 function buildGameState(sessions) {
+  var timerConfig = loadTimerConfig();
   return {
     sessions: sessions,
     currentSession: 0,
@@ -618,6 +737,9 @@ function buildGameState(sessions) {
     strikes: 0,
     timer: {
       elapsed: 0,
+      // For countdown, we count down from duration; elapsed tracks seconds used
+      duration: timerConfig.duration,   // total seconds (0 = unlimited count-up)
+      mode: timerConfig.mode,           // "up" | "down"
       running: false,
       intervalId: null
     },
@@ -817,6 +939,9 @@ function revealSlot(n) {
 
   // Refresh score display (Req 8.5)
   updateScoreDisplay();
+
+  // Play correct answer sound effect
+  playCorrectSound();
 }
 
 /**
@@ -845,10 +970,12 @@ function updateScoreDisplay() {
    ========================================================================== */
 
 /**
- * Increments `gameState.strikes` by 1 (up to a maximum of 3) and updates
- * the visual strike display.
+ * Increments `gameState.strikes` by 1 (up to a maximum of 3), flashes the
+ * full-screen wrong-answer overlay, and resets strikes to 0 once the cap is hit.
  *
- * No-op if the strike count is already at 3.
+ * Instead of 3 persistent indicator boxes, the wrong buzz is a big "✗" overlay
+ * that flashes on screen and fades automatically. After 3 strikes the count
+ * resets to 0 so the overlay can fire again.
  *
  * Requirements: 7.1, 7.3
  */
@@ -856,39 +983,50 @@ function addStrike() {
   if (gameState.strikes < 3) {
     gameState.strikes++;
   }
-  updateStrikeDisplay();
+  // Flash the full-screen overlay
+  showStrikeOverlay();
+  // Play wrong answer sound effect
+  playWrongSound();
+  // Auto-reset after hitting 3
+  if (gameState.strikes >= 3) {
+    gameState.strikes = 0;
+  }
 }
 
 /**
- * Resets `gameState.strikes` to 0 and atomically updates the visual strike
- * display so the count and display are never out of sync.
+ * Manually resets `gameState.strikes` to 0 (/ key).
  *
  * Requirements: 7.4
  */
 function resetStrikes() {
   gameState.strikes = 0;
-  updateStrikeDisplay();
 }
 
 /**
- * Syncs the `.strike-slot` elements in `#strike-display` with the current
- * `gameState.strikes` count.
- *
- * For each of the 3 slots:
- *  - Adds the `active` class if its 0-based index is less than `gameState.strikes`.
- *  - Removes the `active` class otherwise.
- *
- * Requirements: 7.2, 7.5
+ * Triggers the full-screen wrong-answer overlay ("✗") and auto-hides it
+ * after the CSS animation completes (~800 ms).
+ */
+function showStrikeOverlay() {
+  var overlay = document.getElementById("strike-overlay");
+  if (!overlay) return;
+  // Remove any in-progress animation so it restarts cleanly
+  overlay.classList.remove("visible", "flashing");
+  // Force reflow so the browser registers the class removal
+  void overlay.offsetWidth;
+  overlay.classList.add("flashing");
+  // Clean up after animation ends
+  overlay.addEventListener("animationend", function handler() {
+    overlay.classList.remove("flashing");
+    overlay.removeEventListener("animationend", handler);
+  });
+}
+
+/**
+ * updateStrikeDisplay is kept as a no-op for compatibility — the strike state
+ * is now conveyed entirely through the overlay flash, not persistent slots.
  */
 function updateStrikeDisplay() {
-  var slots = document.querySelectorAll(".strike-slot");
-  slots.forEach(function (slot, index) {
-    if (index < gameState.strikes) {
-      slot.classList.add("active");
-    } else {
-      slot.classList.remove("active");
-    }
-  });
+  // No persistent slots — strike state shown via showStrikeOverlay() flash
 }
 
 /* ==========================================================================
@@ -944,9 +1082,9 @@ function updateActiveTeamDisplay() {
 /**
  * Starts the timer if it is not already running.
  *
- * Sets `gameState.timer.running` to true and creates a `setInterval` that
- * increments `gameState.timer.elapsed` by 1 every second and calls
- * `updateTimerDisplay()` to keep the DOM in sync.
+ * In count-up mode (timer.mode === "up"): increments elapsed each second.
+ * In countdown mode (timer.mode === "down"): decrements remaining time each
+ * second and stops automatically at 00:00, flashing the display red.
  *
  * Requirements: 10.2
  */
@@ -954,8 +1092,26 @@ function startTimer() {
   if (gameState.timer.running) return;
   gameState.timer.running = true;
   gameState.timer.intervalId = setInterval(function() {
-    gameState.timer.elapsed++;
-    updateTimerDisplay();
+    if (gameState.timer.mode === "down") {
+      var remaining = gameState.timer.duration - gameState.timer.elapsed;
+      if (remaining <= 0) {
+        // Already at zero — stop and signal time-up
+        pauseTimer();
+        timerTimeUp();
+        return;
+      }
+      gameState.timer.elapsed++;
+      remaining--;
+      updateTimerDisplay();
+      if (remaining <= 0) {
+        pauseTimer();
+        timerTimeUp();
+      }
+    } else {
+      // Count-up mode
+      gameState.timer.elapsed++;
+      updateTimerDisplay();
+    }
   }, 1000);
 }
 
@@ -974,6 +1130,7 @@ function pauseTimer() {
 
 /**
  * Stops the timer and resets elapsed time to 0, then updates the display.
+ * Also removes any time-up styling from the display.
  *
  * Requirements: 10.4
  */
@@ -981,6 +1138,8 @@ function resetTimer() {
   pauseTimer();
   gameState.timer.elapsed = 0;
   updateTimerDisplay();
+  var el = document.getElementById("timer-display");
+  if (el) el.classList.remove("timer-up");
 }
 
 /**
@@ -990,6 +1149,16 @@ function resetTimer() {
  */
 function toggleTimer() {
   if (gameState.timer.running) { pauseTimer(); } else { startTimer(); }
+}
+
+/**
+ * Called when countdown reaches zero. Flashes the timer display red.
+ */
+function timerTimeUp() {
+  var el = document.getElementById("timer-display");
+  if (el) {
+    el.classList.add("timer-up");
+  }
 }
 
 /**
@@ -1007,13 +1176,21 @@ function formatTime(seconds) {
 }
 
 /**
- * Writes the current elapsed time (formatted as MM:SS) to `#timer-display`.
+ * Writes the current timer value (formatted as MM:SS) to `#timer-display`.
+ * In countdown mode, shows the remaining time; in count-up mode, shows elapsed.
  *
  * Requirements: 10.1, 10.5
  */
 function updateTimerDisplay() {
   var el = document.getElementById("timer-display");
-  if (el) el.textContent = formatTime(gameState.timer.elapsed);
+  if (!el) return;
+  var displaySeconds;
+  if (gameState.timer.mode === "down") {
+    displaySeconds = Math.max(0, gameState.timer.duration - gameState.timer.elapsed);
+  } else {
+    displaySeconds = gameState.timer.elapsed;
+  }
+  el.textContent = formatTime(displaySeconds);
 }
 
 /* ==========================================================================
@@ -1246,6 +1423,46 @@ function renderResults(data) {
 /* ==========================================================================
    17. Results Page — Entry Point (resultsInit)
    ========================================================================== */
+
+/**
+ * Removes `familyFeudResults` from localStorage (preserving `familyFeudSessions`)
+ * and navigates back to the Setup Page.
+ *
+ * Requirements: 13.7
+ */
+function handlePlayAgain() {
+  try {
+    localStorage.removeItem("familyFeudResults");
+  } catch (e) { /* ignore */ }
+  window.location = "index.html";
+}
+
+/**
+ * Entry point for the Results Page (results.html).
+ *
+ * - Calls `loadResults()`; on null shows `#error-msg` and returns without
+ *   rendering scores or winner announcement (Req 13.2).
+ * - On valid data: calls `renderResults(data)`, reveals and binds `#play-again-btn`.
+ *
+ * Requirements: 13.1, 13.2, 13.7
+ */
+function resultsInit() {
+  var data = loadResults();
+
+  if (data === null) {
+    var errorMsg = document.getElementById("error-msg");
+    if (errorMsg) errorMsg.removeAttribute("hidden");
+    return;
+  }
+
+  renderResults(data);
+
+  var playAgainBtn = document.getElementById("play-again-btn");
+  if (playAgainBtn) {
+    playAgainBtn.removeAttribute("hidden");
+    playAgainBtn.addEventListener("click", handlePlayAgain);
+  }
+}
 
 /* ==========================================================================
    18. Page Dispatcher — init()

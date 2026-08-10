@@ -8,45 +8,54 @@
 </head>
 <body data-page="game">
 
-  <header id="game-header">
-    <button id="nav-prev" aria-label="Previous session" disabled>&#9664; Prev</button>
-    <h1 id="question-text"></h1>
-    <button id="nav-next" aria-label="Next session">Next &#9654;</button>
-  </header>
+  <!-- Full-screen wrong-answer overlay — shown briefly on X key press -->
+  <div id="strike-overlay" aria-live="assertive" aria-label="Wrong answer">✗</div>
 
-  <main>
-    <div id="board" aria-label="Answer board">
-      <!-- Answer slot columns rendered dynamically by renderBoard() -->
-    </div>
+  <main id="game-main">
 
+    <!-- No-data error state -->
     <p id="no-data-msg" hidden>
       No game data found. Please return to the <a href="index.html">Setup Page</a> to configure your sessions.
     </p>
-  </main>
 
-  <footer id="bottom-bar" aria-label="Game controls">
-    <div id="team1-panel" class="team-panel active" aria-label="Team 1 score panel">
-      <span class="team-label">TEAM 1</span>
-      <span id="team1-score" class="team-score" aria-live="polite">0</span>
-    </div>
+    <!-- Session navigation + board block -->
+    <div id="game-block">
 
-    <div id="strike-display" aria-label="Strike indicators">
-      <div class="strike-slot" aria-label="Strike 1"></div>
-      <div class="strike-slot" aria-label="Strike 2"></div>
-      <div class="strike-slot" aria-label="Strike 3"></div>
-    </div>
+      <!-- Nav row: Prev — question — Next -->
+      <div id="game-nav">
+        <button id="nav-prev" aria-label="Previous session" disabled>&#9664; Prev</button>
+        <h1 id="question-text"></h1>
+        <button id="nav-next" aria-label="Next session">Next &#9654;</button>
+      </div>
 
-    <div id="timer-display" aria-live="polite" aria-label="Timer">00:00</div>
+      <!-- Answer slots rendered here by renderBoard() -->
+      <div id="board" aria-label="Answer board"></div>
 
-    <div id="team2-panel" class="team-panel" aria-label="Team 2 score panel">
-      <span class="team-label">TEAM 2</span>
-      <span id="team2-score" class="team-score" aria-live="polite">0</span>
-    </div>
+    </div><!-- /#game-block -->
 
+    <!-- Bottom bar: Team 1 | Timer | Team 2 -->
+    <div id="bottom-bar" aria-label="Game controls">
+
+      <div id="team1-panel" class="team-panel active" aria-label="Team 1 score panel">
+        <span class="team-label">TEAM 1</span>
+        <span id="team1-score" class="team-score" aria-live="polite">0</span>
+      </div>
+
+      <div id="timer-display" aria-live="polite" aria-label="Timer">00:00</div>
+
+      <div id="team2-panel" class="team-panel" aria-label="Team 2 score panel">
+        <span class="team-label">TEAM 2</span>
+        <span id="team2-score" class="team-score" aria-live="polite">0</span>
+      </div>
+
+    </div><!-- /#bottom-bar -->
+
+    <!-- Keyboard shortcut reference -->
     <div id="shortcut-ref" aria-label="Keyboard shortcuts">
-      1–9/0=Reveal &nbsp; X=Strike &nbsp; /=Reset &nbsp; \=Team &nbsp; T=Timer &nbsp; R=Reset Timer &nbsp; &#9664;&#9654;=Session
+      1–9 / 0 = Reveal &nbsp;|&nbsp; X = Wrong buzz &nbsp;|&nbsp; / = Reset buzz &nbsp;|&nbsp; \ = Switch team &nbsp;|&nbsp; T = Timer &nbsp;|&nbsp; R = Reset timer &nbsp;|&nbsp; ◀ ▶ = Session
     </div>
-  </footer>
+
+  </main>
 
   <script src="js/main.js"></script>
 </body>

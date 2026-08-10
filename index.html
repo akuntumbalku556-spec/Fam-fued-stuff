@@ -17,11 +17,35 @@
       <!-- Add Session button rendered here -->
     </section>
 
+    <!-- Timer configuration panel -->
+    <section id="timer-config-panel" aria-label="Timer settings">
+      <h2 class="timer-config__title">⏱ Timer Settings</h2>
+      <div class="timer-config__body">
+        <div class="timer-config__mode">
+          <label>
+            <input type="radio" name="timer-mode" id="timer-mode-up" value="up" checked>
+            Count up
+          </label>
+          <label>
+            <input type="radio" name="timer-mode" id="timer-mode-down" value="down">
+            Countdown
+          </label>
+        </div>
+        <div class="timer-config__duration" id="timer-duration-row">
+          <label for="timer-minutes">Minutes</label>
+          <input type="number" id="timer-minutes" min="0" max="99" value="1" aria-label="Timer minutes">
+          <span class="timer-config__colon">:</span>
+          <label for="timer-seconds">Seconds</label>
+          <input type="number" id="timer-seconds" min="0" max="59" value="0" aria-label="Timer seconds">
+        </div>
+      </div>
+    </section>
+
     <section id="sessions-container" aria-label="Session panels">
       <!-- Session panels rendered dynamically by setupInit() -->
     </section>
 
-    <section id="validation-area" aria-live="polite">
+    <section id="validation-area" role="status" aria-live="polite" aria-label="Validation messages">
       <!-- Validation messages rendered here -->
     </section>
   </main>
