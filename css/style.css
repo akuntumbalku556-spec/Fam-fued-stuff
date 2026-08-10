@@ -305,12 +305,23 @@ body {
 #board {
   display: flex;
   gap: 1rem;
+  justify-content: center;
 }
 
 /* Left and right column containers */
 .col-left,
 .col-right {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Center column container for ≤5 answers */
+.col-center {
+  flex: 0 1 auto;
+  max-width: 600px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -440,7 +451,8 @@ body {
    ========================================================================== */
 
 #nav-prev,
-#nav-next {
+#nav-next,
+#fullscreen-btn {
   flex-shrink: 0;
   background: var(--bg);
   color: var(--text-primary);
@@ -453,7 +465,8 @@ body {
 }
 
 #nav-prev:hover:not(:disabled),
-#nav-next:hover:not(:disabled) {
+#nav-next:hover:not(:disabled),
+#fullscreen-btn:hover {
   background: var(--active-border);
   color: var(--bg);
 }
@@ -463,6 +476,13 @@ body {
   opacity: 0.3;
   cursor: not-allowed;
   border-color: var(--strike-inactive);
+}
+
+/* Fullscreen button — slightly different styling */
+#fullscreen-btn {
+  font-size: 1.2rem;
+  padding: 0.4rem 0.9rem;
+  line-height: 1;
 }
 
 /* ==========================================================================

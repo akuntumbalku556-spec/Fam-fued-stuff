@@ -808,10 +808,15 @@ function renderAnswerSlots(session) {
     fragment.appendChild(colLeft);
     fragment.appendChild(colRight);
   } else {
-    // Single-column layout: append slots directly, no wrappers
+    // Single-column layout: wrap slots in centered container
+    var centerCol = document.createElement("div");
+    centerCol.className = "col-center";
+    
     for (var j = 1; j <= total; j++) {
-      fragment.appendChild(createSlot(j));
+      centerCol.appendChild(createSlot(j));
     }
+    
+    fragment.appendChild(centerCol);
   }
 
   return fragment;
@@ -1152,13 +1157,20 @@ function toggleTimer() {
 }
 
 /**
- * Called when countdown reaches zero. Flashes the timer display red.
+ * Called when countdown reaches zero. Flashes the timer display red,
+ * then automatically saves results and navigates to the results page.
  */
 function timerTimeUp() {
   var el = document.getElementById("timer-display");
   if (el) {
     el.classList.add("timer-up");
   }
+  
+  // Wait 2 seconds for the visual flash, then auto-navigate to results
+  setTimeout(function() {
+    saveResults();
+    window.location = "results.html";
+  }, 2000);
 }
 
 /**
@@ -1288,11 +1300,34 @@ function handleKey(event) {
     case "R": case "r": resetTimer(); break;
     case "ArrowRight": navigateSession(+1); break;
     case "ArrowLeft":  navigateSession(-1); break;
+    case "F": case "f": toggleFullscreen(); break;
   }
 }
 
 /* ==========================================================================
-   15. Game Page — Entry Point (gameInit)
+   15. Game Page — Fullscreen
+   ========================================================================== */
+
+/**
+ * Toggles fullscreen mode for the document.
+ * Uses the Fullscreen API to enter or exit fullscreen.
+ */
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    // Enter fullscreen
+    document.documentElement.requestFullscreen().catch(function(err) {
+      console.warn("Could not enter fullscreen:", err);
+    });
+  } else {
+    // Exit fullscreen
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  }
+}
+
+/* ==========================================================================
+   16. Game Page — Entry Point (gameInit)
    ========================================================================== */
 
 /**
@@ -1328,6 +1363,12 @@ function gameInit() {
 
   // Bind keyboard handler (Req 6.1, 9.2, 10.2, 11.1)
   document.addEventListener("keydown", handleKey);
+  
+  // Bind fullscreen button click handler
+  var fullscreenBtn = document.getElementById("fullscreen-btn");
+  if (fullscreenBtn) {
+    fullscreenBtn.addEventListener("click", toggleFullscreen);
+  }
 }
 
 /* ==========================================================================
