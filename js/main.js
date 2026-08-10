@@ -652,6 +652,35 @@ function setupInit() {
 /** Module-level game state — populated by gameInit() via buildGameState(). */
 var gameState;
 
+/** Cached DOM elements for better performance */
+var DOM = {
+  // Game page elements
+  board: null,
+  questionText: null,
+  team1Panel: null,
+  team2Panel: null,
+  team1Score: null,
+  team2Score: null,
+  timerDisplay: null,
+  navPrev: null,
+  navNext: null,
+  strikeOverlay: null,
+  
+  // Initialized on gameInit
+  init: function() {
+    this.board = document.getElementById("board");
+    this.questionText = document.getElementById("question-text");
+    this.team1Panel = document.getElementById("team1-panel");
+    this.team2Panel = document.getElementById("team2-panel");
+    this.team1Score = document.getElementById("team1-score");
+    this.team2Score = document.getElementById("team2-score");
+    this.timerDisplay = document.getElementById("timer-display");
+    this.navPrev = document.getElementById("nav-prev");
+    this.navNext = document.getElementById("nav-next");
+    this.strikeOverlay = document.getElementById("strike-overlay");
+  }
+};
+
 /* --------------------------------------------------------------------------
    Sound Effects
    -------------------------------------------------------------------------- */
@@ -959,14 +988,11 @@ function revealSlot(n) {
  * Requirements: 8.4, 8.5
  */
 function updateScoreDisplay() {
-  var team1ScoreEl = document.getElementById("team1-score");
-  var team2ScoreEl = document.getElementById("team2-score");
-
-  if (team1ScoreEl) {
-    team1ScoreEl.textContent = gameState.scores[0];
+  if (DOM.team1Score) {
+    DOM.team1Score.textContent = gameState.scores[0];
   }
-  if (team2ScoreEl) {
-    team2ScoreEl.textContent = gameState.scores[1];
+  if (DOM.team2Score) {
+    DOM.team2Score.textContent = gameState.scores[1];
   }
 }
 
@@ -1351,6 +1377,9 @@ function gameInit() {
     if (noDataMsg) noDataMsg.removeAttribute("hidden");
     return;
   }
+
+  // Initialize DOM cache for better performance
+  DOM.init();
 
   // Build initial state (Req 8.3, 9.1)
   gameState = buildGameState(sessions);

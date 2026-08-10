@@ -3,6 +3,19 @@
    Shared by index.html (Setup Page) and game.html (Game Page)
    ========================================================================== */
 
+/* Performance optimizations */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* Enable GPU acceleration for smoother animations */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* ==========================================================================
    1. CSS Custom Properties (Design Tokens)
    ========================================================================== */
@@ -34,6 +47,23 @@ body {
   background: var(--bg);
   color: var(--text-primary);
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Generic button styles across all pages */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  touch-action: manipulation; /* Prevent double-tap zoom on mobile */
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Form input styles */
+input, textarea {
+  font-family: inherit;
 }
 
 /* ==========================================================================
@@ -342,6 +372,7 @@ body {
   padding: 0.5rem 1rem;
   user-select: none;
   transition: background-color 0.3s ease, border-color 0.3s ease;
+  will-change: background-color, border-color;
 }
 
 /* Answer slot — revealed state: GREEN */
@@ -349,6 +380,13 @@ body {
   background-color: var(--slot-revealed);
   border-color: #2d7a3a;
   color: var(--text-primary);
+  animation: revealPulse 0.4s ease-out;
+}
+
+@keyframes revealPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
 /* ==========================================================================
@@ -377,13 +415,15 @@ body {
   justify-content: center;
   gap: 0.25rem;
   user-select: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  will-change: border-color, box-shadow;
 }
 
 /* Active (currently playing) team: gold border + glow */
 .team-panel.active {
   border-color: var(--active-border);
-  box-shadow: 0 0 0 2px var(--active-border);
+  box-shadow: 0 0 0 2px var(--active-border), 0 0 20px rgba(245, 197, 24, 0.3);
+  transform: scale(1.02);
 }
 
 .team-label {
