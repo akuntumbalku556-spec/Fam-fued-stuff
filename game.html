@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Family Feud game - offline web-based game show experience">
-  <meta name="theme-color" content="#0d0d0d">
+  <meta name="theme-color" content="#f0f4ff">
   <title>Family Feud — Game</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -36,12 +36,19 @@
 
     </div><!-- /#game-block -->
 
-    <!-- Bottom bar: Team 1 | Timer | Team 2 -->
+    <!-- Bottom bar: Team 1 | Strikes | Timer | Team 2 -->
     <div id="bottom-bar" aria-label="Game controls">
 
       <div id="team1-panel" class="team-panel active" aria-label="Team 1 score panel">
         <span class="team-label">TEAM 1</span>
         <span id="team1-score" class="team-score" aria-live="polite">0</span>
+      </div>
+
+      <!-- Strike Display -->
+      <div id="strike-display" aria-label="Strike counter">
+        <div class="strike-slot" data-strike="1"></div>
+        <div class="strike-slot" data-strike="2"></div>
+        <div class="strike-slot" data-strike="3"></div>
       </div>
 
       <div id="timer-display" aria-live="polite" aria-label="Timer">00:00</div>
@@ -55,7 +62,7 @@
 
     <!-- Keyboard shortcut reference -->
     <div id="shortcut-ref" aria-label="Keyboard shortcuts">
-      1–9 / 0 = Reveal &nbsp;|&nbsp; X = Wrong buzz &nbsp;|&nbsp; / = Reset buzz &nbsp;|&nbsp; \ = Switch team &nbsp;|&nbsp; T = Timer &nbsp;|&nbsp; R = Reset timer &nbsp;|&nbsp; F = Fullscreen &nbsp;|&nbsp; ◀ ▶ = Session
+      1–9 / 0 = Reveal &nbsp;|&nbsp; X = Strike &nbsp;|&nbsp; / = Reset &nbsp;|&nbsp; S = Steal (after 3 strikes) &nbsp;|&nbsp; D = Reveal All &nbsp;|&nbsp; \ = Switch team &nbsp;|&nbsp; T = Timer &nbsp;|&nbsp; R = Reset timer &nbsp;|&nbsp; F = Fullscreen &nbsp;|&nbsp; ◀ ▶ = Session
     </div>
 
   </main>

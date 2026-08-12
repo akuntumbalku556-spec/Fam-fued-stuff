@@ -1013,15 +1013,12 @@ function updateScoreDisplay() {
 function addStrike() {
   if (gameState.strikes < 3) {
     gameState.strikes++;
+    updateStrikeDisplay();
   }
   // Flash the full-screen overlay
   showStrikeOverlay();
   // Play wrong answer sound effect
   playWrongSound();
-  // Auto-reset after hitting 3
-  if (gameState.strikes >= 3) {
-    gameState.strikes = 0;
-  }
 }
 
 /**
@@ -1031,6 +1028,7 @@ function addStrike() {
  */
 function resetStrikes() {
   gameState.strikes = 0;
+  updateStrikeDisplay();
 }
 
 /**
@@ -1053,11 +1051,78 @@ function showStrikeOverlay() {
 }
 
 /**
- * updateStrikeDisplay is kept as a no-op for compatibility — the strike state
- * is now conveyed entirely through the overlay flash, not persistent slots.
+ * updateStrikeDisplay updates the visual strike indicators.
+ * Shows X marks based on current strike count (0-3).
  */
 function updateStrikeDisplay() {
-  // No persistent slots — strike state shown via showStrikeOverlay() flash
+  var strikeSlots = document.querySelectorAll(".strike-slot");
+  strikeSlots.forEach(function(slot, index) {
+    if (index < gameState.strikes) {
+      slot.classList.add("active");
+    } else {
+      slot.classList.remove("active");
+    }
+  });
+}
+
+/**
+ * Steal function - transfers all points from current round to the opposing team.
+ * Only works when strikes === 3.
+ * Resets strikes after steal.
+ */
+function stealPoints() {
+  if (gameState.strikes !== 3) return;
+  
+  // Count revealed slots to get points to steal
+  var pointsToSteal = gameState.revealedSlots.filter(function(revealed) {
+    return revealed;
+  }).length;
+  
+  // Transfer points from active team to other team
+  var otherTeam = gameState.activeTeam === 0 ? 1 : 0;
+  gameState.scores[gameState.activeTeam] -= pointsToSteal;
+  gameState.scores[otherTeam] += pointsToSteal;
+  
+  // Ensure scores don't go negative
+  if (gameState.scores[gameState.activeTeam] < 0) {
+    gameState.scores[gameState.activeTeam] = 0;
+  }
+  
+  // Reset strikes and update displays
+  gameState.strikes = 0;
+  updateStrikeDisplay();
+  updateScoreDisplay();
+}
+
+/**
+ * Reveal all remaining answers without awarding points.
+ * Reveals one answer per second for dramatic effect.
+ * Used to show all answers at end of round.
+ */
+function revealAllAnswers() {
+  var session = gameState.sessions[gameState.currentSession];
+  var hiddenIndexes = [];
+  
+  // Collect all hidden slot indexes
+  for (var i = 0; i < session.answers.length; i++) {
+    if (!gameState.revealedSlots[i]) {
+      hiddenIndexes.push(i);
+    }
+  }
+  
+  // Reveal each hidden slot one by one with 1 second interval
+  hiddenIndexes.forEach(function(index, arrIndex) {
+    setTimeout(function() {
+      gameState.revealedSlots[index] = true;
+      
+      // Update DOM
+      var slot = document.querySelector('.answer-slot[data-slot="' + (index + 1) + '"]');
+      if (slot && !slot.classList.contains("revealed")) {
+        slot.classList.add("revealed");
+        slot.textContent = session.answers[index];
+      }
+    }, arrIndex * 1000); // 1000ms = 1 second per reveal
+  });
 }
 
 /* ==========================================================================
@@ -1322,6 +1387,8 @@ function handleKey(event) {
     case "X": case "x": addStrike(); break;
     case "/": resetStrikes(); break;
     case "\\": toggleTeam(); break;
+    case "S": case "s": stealPoints(); break;
+    case "D": case "d": revealAllAnswers(); break;
     case "T": case "t": toggleTimer(); break;
     case "R": case "r": resetTimer(); break;
     case "ArrowRight": navigateSession(+1); break;
