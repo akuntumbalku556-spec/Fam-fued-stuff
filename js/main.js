@@ -8,7 +8,43 @@
    ========================================================================== */
 
 /**
- * Validates that `data` is a conforming sessions array.
+ * Validates that `data` is a conforming packs array.
+ *
+ * Returns true only when:
+ *  - data is an Array with 1–10 elements
+ *  - every element has a string `id` field
+ *  - every element has `team1` and `team2` string fields
+ *  - every element has a `sessions` array with 1-10 sessions
+ *  - every session has a string `question` field
+ *  - every session has an `answers` array with at least 1 element
+ *  - every answer in every `answers` array is a string
+ *
+ * @param {*} data - The value to validate (typically parsed from localStorage).
+ * @returns {boolean}
+ */
+function isValidPacks(data) {
+  return Array.isArray(data)
+    && data.length >= 1
+    && data.length <= 10
+    && data.every(pack =>
+        typeof pack.id === "string"
+        && typeof pack.team1 === "string"
+        && typeof pack.team2 === "string"
+        && Array.isArray(pack.sessions)
+        && pack.sessions.length >= 1
+        && pack.sessions.length <= 10
+        && pack.sessions.every(s =>
+            typeof s.question === "string"
+            && Array.isArray(s.answers)
+            && s.answers.length >= 1
+            && s.answers.every(a => typeof a === "string")
+        )
+        && (typeof pack.expanded === "undefined" || typeof pack.expanded === "boolean")
+    );
+}
+
+/**
+ * Validates that `data` is a conforming sessions array (legacy format).
  *
  * Returns true only when:
  *  - data is an Array with 1–10 elements
@@ -34,16 +70,16 @@ function isValidSessions(data) {
 }
 
 /**
- * Saves the sessions array to localStorage under the key "familyFeudSessions".
+ * Saves the packs array to localStorage under the key "familyFeudPacks".
  *
  * Requirements: 3.1, 3.3, 3.5
  *
- * @param {Array} sessions - The sessions array to persist.
+ * @param {Array} packs - The packs array to persist.
  * @returns {{ ok: true } | { ok: false, error: Error }}
  */
-function saveToStorage(sessions) {
+function saveToStorage(packs) {
   try {
-    localStorage.setItem("familyFeudSessions", JSON.stringify(sessions));
+    localStorage.setItem("familyFeudPacks", JSON.stringify({ schemaVersion: "1.0", packs: packs }));
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error };
@@ -93,11 +129,13 @@ function loadTimerConfig() {
 }
 
 /**
- * Loads and validates sessions from localStorage.
+ * Loads and validates packs from localStorage with migration support.
  *
- * Reads "familyFeudSessions", parses the JSON, and passes the result through
- * `isValidSessions`. Returns the parsed array on success, or `null` if the
+ * Reads "familyFeudPacks", parses the JSON, and passes the result through
+ * `isValidPacks`. Returns the parsed array on success, or `null` if the
  * key is absent, the JSON is malformed, or the data fails validation.
+ *
+ * If legacy "familyFeudSessions" data is found, migrates it to pack format.
  *
  * Requirements: 3.1, 3.3, 3.6
  *
@@ -105,10 +143,34 @@ function loadTimerConfig() {
  */
 function loadFromStorage() {
   try {
-    const raw = localStorage.getItem("familyFeudSessions");
-    if (raw === null) return null;
-    const data = JSON.parse(raw);
-    return isValidSessions(data) ? data : null;
+    // Try loading new pack format
+    const packRaw = localStorage.getItem("familyFeudPacks");
+    if (packRaw !== null) {
+      const packData = JSON.parse(packRaw);
+      if (packData.schemaVersion === "1.0" && isValidPacks(packData.packs)) {
+        return packData.packs;
+      }
+    }
+
+    // Try loading legacy session format and migrate
+    const sessionRaw = localStorage.getItem("familyFeudSessions");
+    if (sessionRaw !== null) {
+      const sessions = JSON.parse(sessionRaw);
+      if (isValidSessions(sessions)) {
+        // Migrate to pack format
+        const migratedPacks = [{
+          id: "pack-" + Date.now(),
+          team1: "Team 1",
+          team2: "Team 2",
+          sessions: sessions,
+          expanded: true
+        }];
+        saveToStorage(migratedPacks);
+        return migratedPacks;
+      }
+    }
+
+    return null;
   } catch (error) {
     return null;
   }
@@ -119,38 +181,215 @@ function loadFromStorage() {
    ========================================================================== */
 
 /**
- * Reads the current DOM state of all session panels and returns a sessions array.
+ * Reads the current DOM state of all pack and session panels and returns a packs array.
  *
- * Queries all `[data-session-index]` panels, reads each panel's question input
- * (`.session-question-input`) and answer inputs (`[data-answer-index]`), and
- * returns a sessions array in index order.
+ * Queries all `[data-pack-index]` panels, reads team names, expanded state,
+ * and all session data within each pack.
+ *
+ * IMPORTANT: Only reads existing pack IDs, never generates new ones.
  *
  * Requirements: 3.1, 3.3
  *
- * @returns {Array<{ question: string, answers: string[] }>}
+ * @returns {Array<{ id: string, team1: string, team2: string, sessions: Array, expanded: boolean }>}
  */
 function collectState() {
-  const panels = document.querySelectorAll("[data-session-index]");
-  const sessions = [];
+  const packPanels = document.querySelectorAll("[data-pack-index]");
+  const packs = [];
 
-  panels.forEach(function (panel) {
-    const questionInput = panel.querySelector(".session-question-input");
-    const question = questionInput ? questionInput.value : "";
+  packPanels.forEach(function (packPanel) {
+    // CRITICAL: Only use existing pack IDs, never generate new ones
+    const packId = packPanel.dataset.packId;
+    if (!packId) {
+      console.error("Pack panel missing data-pack-id attribute!");
+      return; // Skip this pack if it doesn't have an ID
+    }
+    
+    const team1Input = packPanel.querySelector(".pack-team1-input");
+    const team2Input = packPanel.querySelector(".pack-team2-input");
+    const team1 = team1Input ? team1Input.value.trim() : "Team 1";
+    const team2 = team2Input ? team2Input.value.trim() : "Team 2";
+    const expanded = packPanel.classList.contains("expanded");
 
-    const answerInputs = panel.querySelectorAll("[data-answer-index]");
-    const answers = [];
-    answerInputs.forEach(function (input) {
-      answers.push(input.value);
+    const sessionPanels = packPanel.querySelectorAll("[data-session-index]");
+    const sessions = [];
+
+    sessionPanels.forEach(function (panel) {
+      const questionInput = panel.querySelector(".session-question-input");
+      const question = questionInput ? questionInput.value : "";
+
+      const answerInputs = panel.querySelectorAll("[data-answer-index]");
+      const answers = [];
+      answerInputs.forEach(function (input) {
+        answers.push(input.value);
+      });
+
+      sessions.push({ question: question, answers: answers });
     });
 
-    sessions.push({ question: question, answers: answers });
+    packs.push({
+      id: packId,
+      team1: team1,
+      team2: team2,
+      sessions: sessions,
+      expanded: expanded
+    });
   });
 
-  return sessions;
+  return packs;
 }
 
 /**
- * Creates and returns a DOM node for one session panel.
+ * Creates and returns a DOM node for one pack panel.
+ *
+ * The panel includes:
+ *  - A header with pack number, team name inputs, and Delete Pack button
+ *  - A collapsible body containing session panels
+ *  - An "Add Session" button
+ *  - A "Start Pack" button to play this pack individually
+ *
+ * @param {{ id: string, team1: string, team2: string, sessions: Array, expanded: boolean }} pack - Pack data.
+ * @param {number} packIndex - 0-based pack index.
+ * @returns {HTMLElement}
+ */
+function createPackPanel(pack, packIndex) {
+  const panel = document.createElement("div");
+  panel.className = "pack-panel" + (pack.expanded ? " expanded" : "");
+  panel.dataset.packIndex = packIndex;
+  panel.dataset.packId = pack.id;
+
+  // --- Header ---
+  const header = document.createElement("div");
+  header.className = "pack-panel__header";
+  header.addEventListener("click", function(e) {
+    // Only toggle if clicking on the header itself or the title, not on inputs or buttons
+    if (e.target === header || e.target === title || e.target.closest('.pack-panel__title')) {
+      togglePack(packIndex);
+    }
+  });
+
+  const title = document.createElement("h2");
+  title.className = "pack-panel__title";
+  title.textContent = "Pack " + (packIndex + 1);
+
+  const teamInputs = document.createElement("div");
+  teamInputs.className = "pack-panel__team-inputs";
+
+  const team1Label = document.createElement("label");
+  team1Label.textContent = "Team 1: ";
+  const team1Input = document.createElement("input");
+  team1Input.type = "text";
+  team1Input.className = "pack-team1-input";
+  team1Input.maxLength = 50;
+  team1Input.value = pack.team1 || "Team 1";
+  team1Input.placeholder = "Team 1 name";
+  team1Input.addEventListener("input", debouncedSave);
+  team1Label.appendChild(team1Input);
+
+  const team2Label = document.createElement("label");
+  team2Label.textContent = "Team 2: ";
+  const team2Input = document.createElement("input");
+  team2Input.type = "text";
+  team2Input.className = "pack-team2-input";
+  team2Input.maxLength = 50;
+  team2Input.value = pack.team2 || "Team 2";
+  team2Input.placeholder = "Team 2 name";
+  team2Input.addEventListener("input", debouncedSave);
+  team2Label.appendChild(team2Input);
+
+  teamInputs.appendChild(team1Label);
+  teamInputs.appendChild(team2Label);
+
+  const deletePackBtn = document.createElement("button");
+  deletePackBtn.type = "button";
+  deletePackBtn.className = "pack-delete-btn";
+  deletePackBtn.textContent = "Delete Pack";
+  deletePackBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    deletePack(packIndex);
+  });
+
+  header.appendChild(title);
+  header.appendChild(teamInputs);
+  header.appendChild(deletePackBtn);
+  panel.appendChild(header);
+
+  // --- Body (collapsible) ---
+  const body = document.createElement("div");
+  body.className = "pack-panel__body";
+
+  // Show stored score if exists
+  if (pack.lastScore) {
+    const scoreDisplay = document.createElement("div");
+    scoreDisplay.className = "pack-score-display";
+    scoreDisplay.innerHTML = "<strong>Last Score:</strong> " + 
+                            pack.team1 + ": " + pack.lastScore.team1 + " | " + 
+                            pack.team2 + ": " + pack.lastScore.team2;
+    body.appendChild(scoreDisplay);
+  }
+
+  const sessionsContainer = document.createElement("div");
+  sessionsContainer.className = "pack-sessions-container";
+
+  pack.sessions.forEach(function(session, sessionIndex) {
+    const sessionPanel = createSessionPanel(session, sessionIndex, packIndex);
+    sessionsContainer.appendChild(sessionPanel);
+  });
+
+  body.appendChild(sessionsContainer);
+
+  // Button container for Add Session and Start Pack
+  const buttonContainer = document.createElement("div");
+  buttonContainer.className = "pack-button-container";
+
+  // Add Session button
+  const addSessionBtn = document.createElement("button");
+  addSessionBtn.type = "button";
+  addSessionBtn.className = "add-session-btn";
+  addSessionBtn.textContent = "Add Session";
+  addSessionBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    addSession(packIndex);
+  });
+  if (pack.sessions.length >= 10) {
+    addSessionBtn.disabled = true;
+  }
+  buttonContainer.appendChild(addSessionBtn);
+
+  // Start Pack button
+  const startPackBtn = document.createElement("button");
+  startPackBtn.type = "button";
+  startPackBtn.className = "start-pack-btn";
+  startPackBtn.textContent = "Start This Pack";
+  startPackBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    startPack(packIndex);
+  });
+  buttonContainer.appendChild(startPackBtn);
+
+  body.appendChild(buttonContainer);
+
+  panel.appendChild(body);
+
+  return panel;
+}
+
+/**
+ * Toggles the expanded/collapsed state of a pack.
+ *
+ * @param {number} packIndex - 0-based pack index.
+ */
+function togglePack(packIndex) {
+  const packs = collectState();
+  packs[packIndex].expanded = !packs[packIndex].expanded;
+  renderPacks(packs);
+  saveToStorage(packs);
+}
+
+/**
+ * Creates and returns a DOM node for one session panel within a pack.
  *
  * The panel includes:
  *  - A header with the session title and a Delete Session button
@@ -162,29 +401,33 @@ function collectState() {
  * Requirements: 2.5, 2.8, 2.9
  *
  * @param {{ question: string, answers: string[] }} session - Session data.
- * @param {number} index - 0-based session index.
+ * @param {number} sessionIndex - 0-based session index within the pack.
+ * @param {number} packIndex - 0-based pack index.
  * @returns {HTMLElement}
  */
-function createSessionPanel(session, index) {
+function createSessionPanel(session, sessionIndex, packIndex) {
   // Root panel element
   const panel = document.createElement("div");
   panel.className = "session-panel";
-  panel.dataset.sessionIndex = index;
+  panel.dataset.sessionIndex = sessionIndex;
+  panel.dataset.packIndex = packIndex;
 
   // --- Header ---
   const header = document.createElement("div");
   header.className = "session-panel__header";
 
-  const title = document.createElement("h2");
+  const title = document.createElement("h3");
   title.className = "session-panel__title";
-  title.textContent = "Session " + (index + 1);
+  title.textContent = "Session " + (sessionIndex + 1);
 
   const deleteSessionBtn = document.createElement("button");
   deleteSessionBtn.type = "button";
   deleteSessionBtn.className = "session-delete-btn";
   deleteSessionBtn.textContent = "Delete Session";
-  deleteSessionBtn.addEventListener("click", function () {
-    deleteSession(index);
+  deleteSessionBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    e.preventDefault();
+    deleteSession(packIndex, sessionIndex);
   });
 
   header.appendChild(title);
@@ -197,12 +440,12 @@ function createSessionPanel(session, index) {
 
   const questionLabel = document.createElement("label");
   questionLabel.textContent = "Question:";
-  questionLabel.htmlFor = "session-question-" + index;
+  questionLabel.htmlFor = "session-question-" + packIndex + "-" + sessionIndex;
 
   const questionInput = document.createElement("input");
   questionInput.type = "text";
   questionInput.className = "session-question-input";
-  questionInput.id = "session-question-" + index;
+  questionInput.id = "session-question-" + packIndex + "-" + sessionIndex;
   questionInput.maxLength = 200;
   questionInput.value = session.question || "";
   questionInput.placeholder = "Enter your question…";
@@ -223,7 +466,7 @@ function createSessionPanel(session, index) {
     : [""];
 
   answers.forEach(function (answerText, answerIndex) {
-    const row = createAnswerRow(answerText, answerIndex, index);
+    const row = createAnswerRow(answerText, answerIndex, sessionIndex, packIndex);
     answersList.appendChild(row);
   });
 
@@ -234,8 +477,10 @@ function createSessionPanel(session, index) {
   addAnswerBtn.type = "button";
   addAnswerBtn.className = "add-answer-btn";
   addAnswerBtn.textContent = "Add Answer";
-  addAnswerBtn.addEventListener("click", function () {
-    addAnswer(index);
+  addAnswerBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    e.preventDefault();
+    addAnswer(packIndex, sessionIndex);
   });
 
   // Disable if already at 10 answers
@@ -256,10 +501,11 @@ function createSessionPanel(session, index) {
  *
  * @param {string} answerText - Initial value for the answer input.
  * @param {number} answerIndex - 0-based answer index.
- * @param {number} sessionIndex - 0-based session index (for event handlers).
+ * @param {number} sessionIndex - 0-based session index.
+ * @param {number} packIndex - 0-based pack index.
  * @returns {HTMLElement}
  */
-function createAnswerRow(answerText, answerIndex, sessionIndex) {
+function createAnswerRow(answerText, answerIndex, sessionIndex, packIndex) {
   const row = document.createElement("div");
   row.className = "answer-row";
 
@@ -280,8 +526,10 @@ function createAnswerRow(answerText, answerIndex, sessionIndex) {
   deleteAnswerBtn.type = "button";
   deleteAnswerBtn.className = "answer-delete-btn";
   deleteAnswerBtn.textContent = "Delete";
-  deleteAnswerBtn.addEventListener("click", function () {
-    deleteAnswer(sessionIndex, answerIndex);
+  deleteAnswerBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    e.preventDefault();
+    deleteAnswer(packIndex, sessionIndex, answerIndex);
   });
 
   row.appendChild(label);
@@ -292,80 +540,212 @@ function createAnswerRow(answerText, answerIndex, sessionIndex) {
 }
 
 /**
- * Clears `#sessions-container` and re-renders all session panels from the
- * provided sessions array. Also enforces the disabled state of `#add-session-btn`
- * when the session count reaches 10.
+ * Clears `#sessions-container` and re-renders all pack panels from the
+ * provided packs array. Also enforces the disabled state of buttons.
  *
  * Requirements: 2.1, 2.3
  *
- * @param {Array<{ question: string, answers: string[] }>} sessions
+ * @param {Array} packs
  */
-function renderSessions(sessions) {
+function renderPacks(packs) {
   const container = document.getElementById("sessions-container");
   if (!container) return;
 
   // Clear existing panels
   container.innerHTML = "";
 
-  // Render a panel for each session
-  sessions.forEach(function (session, index) {
-    const panel = createSessionPanel(session, index);
+  // Render a panel for each pack
+  packs.forEach(function (pack, index) {
+    const panel = createPackPanel(pack, index);
     container.appendChild(panel);
   });
 
-  // Enforce Add Session button disabled state at 10 sessions (Req 2.3, 2.4)
-  const addSessionBtn = document.getElementById("add-session-btn");
-  if (addSessionBtn) {
-    addSessionBtn.disabled = sessions.length >= 10;
+  // Enforce Add Pack button disabled state at 10 packs
+  const addPackBtn = document.getElementById("add-pack-btn");
+  if (addPackBtn) {
+    addPackBtn.disabled = packs.length >= 10;
   }
 
-  // Disable delete buttons when only one session remains (Req 2.10)
-  if (sessions.length === 1) {
-    const deleteBtn = container.querySelector(".session-delete-btn");
+  // Disable delete pack buttons when only one pack remains
+  if (packs.length === 1) {
+    const deleteBtn = container.querySelector(".pack-delete-btn");
     if (deleteBtn) deleteBtn.disabled = true;
   }
 }
 
+/**
+ * Legacy function name kept for compatibility
+ */
+function renderSessions(sessions) {
+  // This shouldn't be called anymore, but kept for safety
+  console.warn("renderSessions called - migrating to pack format");
+  const packs = [{
+    id: "pack-" + Date.now(),
+    team1: "Team 1",
+    team2: "Team 2",
+    sessions: sessions,
+    expanded: true
+  }];
+  renderPacks(packs);
+}
+
 /* ==========================================================================
-   3. Setup Page — Session CRUD
+   3. Setup Page — Pack & Session CRUD
    ========================================================================== */
 
 /**
- * Appends a new empty session to the sessions array and re-renders.
- *
- * Calls `collectState()` to sync DOM → state first, then pushes a new
- * `{question:"", answers:[""]}` entry. No-op if the current session count
- * is already at the maximum of 10.
- *
- * Requirements: 2.2, 2.3, 2.4, 2.5
+ * Appends a new empty pack to the packs array and re-renders.
  */
-function addSession() {
-  var sessions = collectState();
-  if (sessions.length >= 10) return;
+var addPackInProgress = false;
+function addPack() {
+  // Prevent rapid multiple calls
+  if (addPackInProgress) return;
+  addPackInProgress = true;
+  
+  var packs = collectState();
+  if (packs.length >= 10) {
+    addPackInProgress = false;
+    return;
+  }
 
-  sessions.push({ question: "", answers: [""] });
-  renderSessions(sessions);
-  saveToStorage(sessions);
+  var newPack = {
+    id: "pack-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9),
+    team1: "Team 1",
+    team2: "Team 2",
+    sessions: [{ question: "", answers: [""] }],
+    expanded: true
+  };
+  
+  packs.push(newPack);
+  renderPacks(packs);
+  saveToStorage(packs);
+  
+  // Reset flag after a short delay
+  setTimeout(function() {
+    addPackInProgress = false;
+  }, 300);
 }
 
 /**
- * Removes the session at the given 0-based index and re-renders.
- *
- * Calls `collectState()` to sync DOM → state first, then splices out the
- * session at `index`. No-op if only one session remains, keeping the delete
- * button disabled (enforced by renderSessions → createSessionPanel).
- *
- * Requirements: 2.9, 2.10
- *
- * @param {number} index - 0-based index of the session to remove.
+ * Starts a specific pack by storing its ID and navigating to game.html
+ * 
+ * @param {number} packIndex - 0-based index of the pack to start
  */
-function deleteSession(index) {
-  var sessions = collectState();
-  if (sessions.length <= 1) return;
+function startPack(packIndex) {
+  var packs = collectState();
+  var pack = packs[packIndex];
+  
+  // Validate the pack
+  var errors = validateSinglePack(pack, packIndex);
+  var validationArea = document.getElementById("validation-area");
+  
+  if (validationArea) {
+    validationArea.innerHTML = "";
+    
+    if (errors.length > 0) {
+      errors.forEach(function (errorText) {
+        var msg = document.createElement("div");
+        msg.className = "validation-message";
+        msg.textContent = errorText;
+        validationArea.appendChild(msg);
+      });
+      return;
+    }
+  }
+  
+  // Save packs, select this pack, and navigate
+  saveToStorage(packs);
+  saveTimerConfig();
+  sessionStorage.setItem("familyFeudSelectedPack", pack.id);
+  window.location = "game.html";
+}
 
-  sessions.splice(index, 1);
-  renderSessions(sessions);
-  saveToStorage(sessions);
+/**
+ * Validates a single pack and returns error messages
+ * 
+ * @param {Object} pack - Pack to validate
+ * @param {number} packIndex - Pack index for error messages
+ * @returns {string[]} Array of error strings
+ */
+function validateSinglePack(pack, packIndex) {
+  var errors = [];
+  var packNum = packIndex + 1;
+  
+  // Validate team names
+  if (!pack.team1 || pack.team1.trim() === "") {
+    errors.push("Pack " + packNum + ": Team 1 name is required");
+  }
+  if (!pack.team2 || pack.team2.trim() === "") {
+    errors.push("Pack " + packNum + ": Team 2 name is required");
+  }
+  
+  // Validate sessions within pack
+  pack.sessions.forEach(function (session, sessionIndex) {
+    var sessionNum = sessionIndex + 1;
+    
+    if (session.question.trim() === "") {
+      errors.push("Pack " + packNum + ", Session " + sessionNum + ": question is required");
+    }
+    
+    if (session.answers.every(function (a) { return a.trim() === ""; })) {
+      errors.push("Pack " + packNum + ", Session " + sessionNum + ": at least one answer is required");
+    }
+  });
+  
+  return errors;
+}
+
+/**
+ * Removes the pack at the given 0-based index and re-renders.
+ *
+ * @param {number} packIndex - 0-based index of the pack to remove.
+ */
+function deletePack(packIndex) {
+  var packs = collectState();
+  if (packs.length <= 1) return;
+
+  // Check if pack has configured data
+  var pack = packs[packIndex];
+  var hasData = pack.sessions.length > 1 || 
+                pack.sessions.some(s => s.question.trim() !== "" || s.answers.some(a => a.trim() !== ""));
+
+  if (hasData) {
+    var confirmed = confirm("Delete Pack " + (packIndex + 1) + " with " + pack.sessions.length + " session(s)?");
+    if (!confirmed) return;
+  }
+
+  packs.splice(packIndex, 1);
+  renderPacks(packs);
+  saveToStorage(packs);
+}
+
+/**
+ * Appends a new empty session to the pack at the given 0-based index and re-renders.
+ *
+ * @param {number} packIndex - 0-based index of the pack to update.
+ */
+function addSession(packIndex) {
+  var packs = collectState();
+  if (packs[packIndex].sessions.length >= 10) return;
+
+  packs[packIndex].sessions.push({ question: "", answers: [""] });
+  renderPacks(packs);
+  saveToStorage(packs);
+}
+
+/**
+ * Removes the session at the given 0-based indices and re-renders.
+ *
+ * @param {number} packIndex - 0-based index of the pack.
+ * @param {number} sessionIndex - 0-based index of the session to remove.
+ */
+function deleteSession(packIndex, sessionIndex) {
+  var packs = collectState();
+  if (packs[packIndex].sessions.length <= 1) return;
+
+  packs[packIndex].sessions.splice(sessionIndex, 1);
+  renderPacks(packs);
+  saveToStorage(packs);
 }
 
 /* ==========================================================================
@@ -373,49 +753,35 @@ function deleteSession(index) {
    ========================================================================== */
 
 /**
- * Appends a new empty answer to the session at the given 0-based index and
+ * Appends a new empty answer to the session at the given indices and
  * re-renders and saves.
  *
- * Calls `collectState()` to sync DOM → state first, then pushes an empty
- * string to the session's answers array. No-op if the session already has 10
- * answers (the "Add Answer" button will also be disabled in that case).
- *
- * Requirements: 2.6, 2.7, 2.11
- *
+ * @param {number} packIndex - 0-based index of the pack.
  * @param {number} sessionIndex - 0-based index of the session to update.
  */
-function addAnswer(sessionIndex) {
-  var sessions = collectState();
-  if (sessions[sessionIndex].answers.length >= 10) return;
+function addAnswer(packIndex, sessionIndex) {
+  var packs = collectState();
+  if (packs[packIndex].sessions[sessionIndex].answers.length >= 10) return;
 
-  sessions[sessionIndex].answers.push("");
-  renderSessions(sessions);
-  saveToStorage(sessions);
+  packs[packIndex].sessions[sessionIndex].answers.push("");
+  renderPacks(packs);
+  saveToStorage(packs);
 }
 
 /**
- * Removes the answer at the given 0-based `answerIndex` from the session at
- * the given 0-based `sessionIndex`, then re-renders and saves.
+ * Removes the answer at the given indices, then re-renders and saves.
  *
- * Calls `collectState()` to sync DOM → state first, then splices out the
- * answer. No-op if the session has only 1 answer remaining.
- *
- * Label re-sequencing is automatic: `renderSessions` → `createSessionPanel`
- * → `createAnswerRow` always rebuilds labels sequentially from 0, so after
- * the splice the labels will be 1-based with no gaps.
- *
- * Requirements: 2.12, 2.13, 2.14
- *
+ * @param {number} packIndex - 0-based index of the pack.
  * @param {number} sessionIndex - 0-based index of the session to update.
  * @param {number} answerIndex  - 0-based index of the answer to remove.
  */
-function deleteAnswer(sessionIndex, answerIndex) {
-  var sessions = collectState();
-  if (sessions[sessionIndex].answers.length <= 1) return;
+function deleteAnswer(packIndex, sessionIndex, answerIndex) {
+  var packs = collectState();
+  if (packs[packIndex].sessions[sessionIndex].answers.length <= 1) return;
 
-  sessions[sessionIndex].answers.splice(answerIndex, 1);
-  renderSessions(sessions);
-  saveToStorage(sessions);
+  packs[packIndex].sessions[sessionIndex].answers.splice(answerIndex, 1);
+  renderPacks(packs);
+  saveToStorage(packs);
 }
 
 /* ==========================================================================
@@ -423,31 +789,37 @@ function deleteAnswer(sessionIndex, answerIndex) {
    ========================================================================== */
 
 /**
- * Validates an array of session objects and returns a list of error strings.
+ * Validates an array of pack objects and returns a list of error strings.
  *
- * Rules:
- *  - If a session's question is empty (after trimming) → push an error.
- *  - If all of a session's answers are empty strings (after trimming) → push an error.
- *  - An empty sessions array is considered valid (returns []).
- *
- * Requirements: 4.3, 4.4
- *
- * @param {Array<{ question: string, answers: string[] }>} sessions
- * @returns {string[]} Array of error strings; empty array means all sessions are valid.
+ * @param {Array} packs
+ * @returns {string[]} Array of error strings; empty array means all packs are valid.
  */
-function validateSessions(sessions) {
+function validatePacks(packs) {
   var errors = [];
 
-  sessions.forEach(function (session, index) {
-    var sessionNum = index + 1;
+  packs.forEach(function (pack, packIndex) {
+    var packNum = packIndex + 1;
 
-    if (session.question.trim() === "") {
-      errors.push("Session " + sessionNum + ": question is required");
+    // Validate team names
+    if (!pack.team1 || pack.team1.trim() === "") {
+      errors.push("Pack " + packNum + ": Team 1 name is required");
+    }
+    if (!pack.team2 || pack.team2.trim() === "") {
+      errors.push("Pack " + packNum + ": Team 2 name is required");
     }
 
-    if (session.answers.every(function (a) { return a.trim() === ""; })) {
-      errors.push("Session " + sessionNum + ": at least one answer is required");
-    }
+    // Validate sessions within pack
+    pack.sessions.forEach(function (session, sessionIndex) {
+      var sessionNum = sessionIndex + 1;
+
+      if (session.question.trim() === "") {
+        errors.push("Pack " + packNum + ", Session " + sessionNum + ": question is required");
+      }
+
+      if (session.answers.every(function (a) { return a.trim() === ""; })) {
+        errors.push("Pack " + packNum + ", Session " + sessionNum + ": at least one answer is required");
+      }
+    });
   });
 
   return errors;
@@ -492,15 +864,15 @@ var debouncedSave = debounce(function () {
 /**
  * Handles the "Start Game" button click on the Setup Page.
  *
- * Reads current DOM state, validates all sessions, and either:
- *  - Renders per-session error messages in `#validation-area` and returns early, or
+ * Reads current DOM state, validates all packs, and either:
+ *  - Renders per-pack error messages in `#validation-area` and returns early, or
  *  - Saves to localStorage and navigates to game.html.
  *
  * Requirements: 3.4, 4.2, 4.3
  */
 function handleStartGame() {
-  var sessions = collectState();
-  var errors = validateSessions(sessions);
+  var packs = collectState();
+  var errors = validatePacks(packs);
   var validationArea = document.getElementById("validation-area");
 
   if (!validationArea) return;
@@ -520,7 +892,7 @@ function handleStartGame() {
   }
 
   // No errors: save then navigate
-  saveToStorage(sessions);
+  saveToStorage(packs);
   saveTimerConfig();
   window.location = "game.html";
 }
@@ -528,17 +900,16 @@ function handleStartGame() {
 /**
  * Entry point for the Setup Page (index.html).
  *
- * - Attempts to load saved sessions from localStorage.
+ * - Attempts to load saved packs from localStorage.
  *   If localStorage itself is unavailable, shows a storage-warning banner.
- *   If data is absent or invalid, initialises with one empty default session.
- * - Renders the session list.
- * - Injects "Add Session" and "Start Game" buttons and binds their click handlers.
- * - Binds an `input` delegation listener on `#sessions-container` for debounced saves.
+ *   If data is absent or invalid, initialises with one empty default pack.
+ * - Renders the pack list.
+ * - Injects "Add Pack" and "Start Game" buttons and binds their click handlers.
  *
  * Requirements: 3.2, 3.4, 3.5, 4.1, 4.2, 4.3
  */
 function setupInit() {
-  var sessions;
+  var packs;
   var storageAvailable = true;
 
   // Detect whether localStorage itself is accessible (Req 3.5)
@@ -557,48 +928,76 @@ function setupInit() {
       banner.textContent = "⚠ Storage unavailable. Your setup will not be saved.";
       main.insertBefore(banner, main.firstChild);
     }
-    sessions = [{ question: "", answers: [""] }];
+    packs = [{
+      id: "pack-" + Date.now(),
+      team1: "Team 1",
+      team2: "Team 2",
+      sessions: [{ question: "", answers: [""] }],
+      expanded: true
+    }];
   } else {
-    // Attempt to load saved sessions (Req 3.2)
-    sessions = loadFromStorage();
-    if (sessions === null) {
-      sessions = [{ question: "", answers: [""] }];
+    // Attempt to load saved packs (Req 3.2)
+    packs = loadFromStorage();
+    if (packs === null) {
+      packs = [{
+        id: "pack-" + Date.now(),
+        team1: "Team 1",
+        team2: "Team 2",
+        sessions: [{ question: "", answers: [""] }],
+        expanded: true
+      }];
     }
   }
 
-  // Render sessions panels (Req 3.2, 2.1)
-  renderSessions(sessions);
+  // Render packs panels (Req 3.2, 2.1)
+  renderPacks(packs);
 
-  // Inject "Add Session" button into #controls-bar (Req 2.2)
+  // Inject "Add Pack" button into #controls-bar
   var controlsBar = document.getElementById("controls-bar");
-  if (controlsBar && !document.getElementById("add-session-btn")) {
-    var addSessionBtn = document.createElement("button");
-    addSessionBtn.type = "button";
-    addSessionBtn.id = "add-session-btn";
-    addSessionBtn.textContent = "Add Session";
-    addSessionBtn.addEventListener("click", function () {
-      addSession();
+  if (controlsBar) {
+    // Remove any existing button first to prevent duplicates
+    var existingBtn = document.getElementById("add-pack-btn");
+    if (existingBtn) {
+      existingBtn.remove();
+    }
+    
+    var addPackBtn = document.createElement("button");
+    addPackBtn.type = "button";
+    addPackBtn.id = "add-pack-btn";
+    addPackBtn.textContent = "Add Pack";
+    addPackBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      addPack();
     });
-    controlsBar.appendChild(addSessionBtn);
+    controlsBar.appendChild(addPackBtn);
   }
 
   // Inject "Start Game" button into #sticky-footer (Req 4.1)
   var stickyFooter = document.getElementById("sticky-footer");
-  if (stickyFooter && !document.getElementById("start-game-btn")) {
+  if (stickyFooter) {
+    // Remove any existing button first to prevent duplicates
+    var existingBtn = document.getElementById("start-game-btn");
+    if (existingBtn) {
+      existingBtn.remove();
+    }
+    
     var startGameBtn = document.createElement("button");
     startGameBtn.type = "button";
     startGameBtn.id = "start-game-btn";
     startGameBtn.textContent = "Start Game";
-    startGameBtn.addEventListener("click", function () {
+    startGameBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
       handleStartGame();
     });
     stickyFooter.appendChild(startGameBtn);
   }
 
-  // Enforce disabled state of Add Session button after initial render
-  var addBtn = document.getElementById("add-session-btn");
+  // Enforce disabled state of Add Pack button after initial render
+  var addBtn = document.getElementById("add-pack-btn");
   if (addBtn) {
-    addBtn.disabled = sessions.length >= 10;
+    addBtn.disabled = packs.length >= 10;
   }
 
   // --- Timer Config ---
@@ -714,26 +1113,113 @@ function playWrongSound() {
 }
 
 /**
- * Reads and validates sessions from localStorage for the Game Page.
+ * Reads and validates packs from localStorage for the Game Page.
  *
- * Delegates to `loadFromStorage()` and returns its result directly:
- * the parsed sessions array on success, or `null` if the key is absent,
- * the JSON is malformed, or the data fails schema validation.
+ * Returns an object with packs array and team names if successful.
  *
  * Requirements: 5.1, 5.2, 5.3
  *
- * @returns {Array|null}
+ * @returns {{packs: Array, selectedPack: Object}|null}
  */
-function loadSessions() {
+function loadPacks() {
   try {
-    return loadFromStorage();
+    var packs = loadFromStorage();
+    if (!packs || packs.length === 0) return null;
+    
+    // Check if pack ID is stored in sessionStorage for this session
+    var selectedPackId = sessionStorage.getItem("familyFeudSelectedPack");
+    var selectedPack = null;
+    
+    if (selectedPackId) {
+      selectedPack = packs.find(function(p) { return p.id === selectedPackId; });
+    }
+    
+    // If only one pack or already selected, return it
+    if (packs.length === 1 || selectedPack) {
+      return {
+        packs: packs,
+        selectedPack: selectedPack || packs[0]
+      };
+    }
+    
+    // Multiple packs and none selected - need selection screen
+    return {
+      packs: packs,
+      selectedPack: null
+    };
   } catch (e) {
     return null;
   }
 }
 
 /**
- * Constructs and returns the initial game state object from a sessions array.
+ * Shows pack selection screen when multiple packs exist.
+ *
+ * @param {Array} packs - Array of pack objects
+ */
+function showPackSelection(packs) {
+  var main = document.getElementById("game-main");
+  if (!main) return;
+  
+  // Hide game elements
+  document.getElementById("game-block").style.display = "none";
+  document.getElementById("bottom-bar").style.display = "none";
+  document.getElementById("shortcut-ref").style.display = "none";
+  
+  // Create selection screen
+  var selectionScreen = document.createElement("div");
+  selectionScreen.id = "pack-selection-screen";
+  selectionScreen.style.cssText = "max-width: 600px; margin: 50px auto; text-align: center;";
+  
+  var title = document.createElement("h1");
+  title.textContent = "Select a Pack to Play";
+  title.style.marginBottom = "30px";
+  selectionScreen.appendChild(title);
+  
+  var packList = document.createElement("div");
+  packList.style.cssText = "display: flex; flex-direction: column; gap: 15px;";
+  
+  packs.forEach(function(pack, index) {
+    var packButton = document.createElement("button");
+    packButton.type = "button";
+    packButton.style.cssText = "padding: 20px; font-size: 18px; cursor: pointer; border: 2px solid #ccc; border-radius: 8px; background: white;";
+    packButton.innerHTML = "<strong>Pack " + (index + 1) + "</strong><br>" +
+                           pack.team1 + " vs " + pack.team2 + "<br>" +
+                           "<small>" + pack.sessions.length + " session(s)</small>";
+    
+    packButton.addEventListener("click", function() {
+      sessionStorage.setItem("familyFeudSelectedPack", pack.id);
+      window.location.reload();
+    });
+    
+    packButton.addEventListener("mouseenter", function() {
+      this.style.background = "#f0f4ff";
+      this.style.borderColor = "#4a90e2";
+    });
+    
+    packButton.addEventListener("mouseleave", function() {
+      this.style.background = "white";
+      this.style.borderColor = "#ccc";
+    });
+    
+    packList.appendChild(packButton);
+  });
+  
+  selectionScreen.appendChild(packList);
+  main.insertBefore(selectionScreen, main.firstChild);
+}
+
+/**
+ * Legacy function for backward compatibility
+ */
+function loadSessions() {
+  var result = loadPacks();
+  if (!result || !result.selectedPack) return null;
+  return result.selectedPack.sessions;
+}
+
+/**
+ * Constructs and returns the initial game state object from a pack.
  *
  * The returned object is the single source of truth for all runtime state on
  * the Game Page. The caller (gameInit) assigns the return value to `gameState`.
@@ -748,14 +1234,17 @@ function loadSessions() {
  *   strikes        : number  — 0–3; 0 on init
  *   timer          : { elapsed: number, running: boolean, intervalId: number|null }
  *   navigating     : boolean — true while a session transition is in progress
+ *   team1Name      : string  — Display name for team 1
+ *   team2Name      : string  — Display name for team 2
  * }
  *
  * Requirements: 5.1, 8.3, 9.1
  *
- * @param {Array} sessions - Validated sessions array from loadSessions().
+ * @param {Object} pack - Pack object with sessions and team names
  * @returns {Object} Initial game state.
  */
-function buildGameState(sessions) {
+function buildGameState(pack) {
+  var sessions = pack.sessions;
   var timerConfig = loadTimerConfig();
   return {
     sessions: sessions,
@@ -772,7 +1261,9 @@ function buildGameState(sessions) {
       running: false,
       intervalId: null
     },
-    navigating: false
+    navigating: false,
+    team1Name: pack.team1 || "TEAM 1",
+    team2Name: pack.team2 || "TEAM 2"
   };
 }
 
@@ -1427,21 +1918,28 @@ function toggleFullscreen() {
  * Entry point for the Game Page (game.html).
  *
  * Steps:
- *  1. Calls `loadSessions()` to read and validate session data from localStorage.
+ *  1. Calls `loadPacks()` to read and validate pack data from localStorage.
  *  2. If null (absent, malformed, or invalid), reveals `#no-data-msg` and returns
  *     without binding keyboard or attempting to render the board (Req 5.2, 5.3).
- *  3. On valid data: builds initial game state, renders the board for session 0,
+ *  3. If multiple packs and none selected, shows pack selection screen.
+ *  4. On valid data: builds initial game state, renders the board for session 0,
  *     initialises all display widgets, and binds the keyboard handler.
  *
  * Requirements: 5.2, 5.3, 8.3, 9.1
  */
 function gameInit() {
-  var sessions = loadSessions();
+  var packData = loadPacks();
 
-  if (sessions === null) {
+  if (packData === null) {
     // No valid data — show error message, do not bind keyboard (Req 5.2, 5.3)
     var noDataMsg = document.getElementById("no-data-msg");
     if (noDataMsg) noDataMsg.removeAttribute("hidden");
+    return;
+  }
+
+  // If no pack selected (multiple packs), show selection screen
+  if (!packData.selectedPack) {
+    showPackSelection(packData.packs);
     return;
   }
 
@@ -1449,7 +1947,13 @@ function gameInit() {
   DOM.init();
 
   // Build initial state (Req 8.3, 9.1)
-  gameState = buildGameState(sessions);
+  gameState = buildGameState(packData.selectedPack);
+
+  // Update team labels with custom names
+  var team1Label = document.querySelector("#team1-panel .team-label");
+  var team2Label = document.querySelector("#team2-panel .team-label");
+  if (team1Label) team1Label.textContent = gameState.team1Name;
+  if (team2Label) team2Label.textContent = gameState.team2Name;
 
   // Render the board and initialise all displays
   renderBoard(0);                // renders session 0 board + nav buttons
@@ -1474,8 +1978,9 @@ function gameInit() {
 /**
  * Persists both teams' current scores to localStorage under the key
  * `familyFeudResults` just before navigating to `results.html`.
+ * Also saves the score to the pack's lastScore field.
  *
- * Written value: `{ team1: gameState.scores[0], team2: gameState.scores[1] }`
+ * Written value: `{ team1: gameState.scores[0], team2: gameState.scores[1], team1Name, team2Name }`
  *
  * Any localStorage error is swallowed silently — the navigation to
  * `results.html` proceeds regardless, where `loadResults()` will detect the
@@ -1485,10 +1990,33 @@ function gameInit() {
  */
 function saveResults() {
   try {
+    // Save results for results page
     localStorage.setItem(
       "familyFeudResults",
-      JSON.stringify({ team1: gameState.scores[0], team2: gameState.scores[1] })
+      JSON.stringify({ 
+        team1: gameState.scores[0], 
+        team2: gameState.scores[1],
+        team1Name: gameState.team1Name,
+        team2Name: gameState.team2Name
+      })
     );
+    
+    // Save score to the pack
+    var selectedPackId = sessionStorage.getItem("familyFeudSelectedPack");
+    if (selectedPackId) {
+      var packs = loadFromStorage();
+      if (packs) {
+        var packIndex = packs.findIndex(function(p) { return p.id === selectedPackId; });
+        if (packIndex !== -1) {
+          packs[packIndex].lastScore = {
+            team1: gameState.scores[0],
+            team2: gameState.scores[1],
+            timestamp: Date.now()
+          };
+          saveToStorage(packs);
+        }
+      }
+    }
   } catch (e) {
     // Storage unavailable — results.html will handle the missing data gracefully
   }
@@ -1525,11 +2053,16 @@ function loadResults() {
  *
  * @param {number} team1 - Team 1's final score.
  * @param {number} team2 - Team 2's final score.
- * @returns {string} "TEAM 1 WINS!", "TEAM 2 WINS!", or "IT'S A TIE!"
+ * @param {string} team1Name - Team 1's name.
+ * @param {string} team2Name - Team 2's name.
+ * @returns {string} Winner announcement text
  */
-function determineWinner(team1, team2) {
-  if (team1 > team2) return "TEAM 1 WINS!";
-  if (team2 > team1) return "TEAM 2 WINS!";
+function determineWinner(team1, team2, team1Name, team2Name) {
+  team1Name = team1Name || "TEAM 1";
+  team2Name = team2Name || "TEAM 2";
+  
+  if (team1 > team2) return team1Name.toUpperCase() + " WINS!";
+  if (team2 > team1) return team2Name.toUpperCase() + " WINS!";
   return "IT'S A TIE!";
 }
 
@@ -1539,13 +2072,25 @@ function determineWinner(team1, team2) {
  * Steps:
  *  1. Writes `data.team1` to `#team1-final-score` (Req 13.3).
  *  2. Writes `data.team2` to `#team2-final-score` (Req 13.3).
- *  3. Sets `#winner-banner` text to `determineWinner(data.team1, data.team2)` (Req 13.4, 13.5, 13.6).
+ *  3. Updates team labels if custom names provided.
+ *  4. Sets `#winner-banner` text to `determineWinner(...)` (Req 13.4, 13.5, 13.6).
  *
  * Requirements: 13.3, 13.4, 13.5, 13.6
  *
- * @param {{ team1: number, team2: number }} data - Validated results data.
+ * @param {{ team1: number, team2: number, team1Name?: string, team2Name?: string }} data - Validated results data.
  */
 function renderResults(data) {
+  // Update team labels if custom names provided
+  if (data.team1Name) {
+    var team1Label = document.querySelector("#team1-result-panel .score-team-label");
+    if (team1Label) team1Label.textContent = data.team1Name;
+  }
+  
+  if (data.team2Name) {
+    var team2Label = document.querySelector("#team2-result-panel .score-team-label");
+    if (team2Label) team2Label.textContent = data.team2Name;
+  }
+  
   // Populate score panels (Req 13.3)
   var team1Score = document.getElementById("team1-final-score");
   var team2Score = document.getElementById("team2-final-score");
@@ -1554,7 +2099,7 @@ function renderResults(data) {
 
   // Set winner announcement (Req 13.4, 13.5, 13.6)
   var banner = document.getElementById("winner-banner");
-  if (banner) banner.textContent = determineWinner(data.team1, data.team2);
+  if (banner) banner.textContent = determineWinner(data.team1, data.team2, data.team1Name, data.team2Name);
 }
 
 /* ==========================================================================

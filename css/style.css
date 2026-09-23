@@ -23,7 +23,7 @@ html {
 :root {
   
   --bg:               #f0f4ff;        /* Soft blue-white background */
-  --loading:          hsl(219, 100%, 84%);        /* Clean panels (renamed from panel-bg) */
+  --loading:          hsl(219, 100%, 83%);        /* Clean panels (renamed from panel-bg) */
   --slot-hidden:      #e3f2fd;        /* Light blue for hidden slots */
   --slot-revealed:    #4caf50;        /* Vibrant green for revealed */
   --text-primary:     #1a237e;        /* Deep blue for primary text */
@@ -95,30 +95,198 @@ input, textarea {
 }
 
 /* ==========================================================================
-   4. Setup Page — Session Panels
+   4. Setup Page — Pack & Session Panels
    ========================================================================== */
 
-/* Outer wrapper for the session list */
+/* Outer wrapper for the pack list */
 #sessions-container {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.5rem;
   padding: 0 0 1rem;
+}
+
+/* Individual pack card */
+.pack-panel {
+  background: var(--loading);
+  border: 3px solid #c5cae9;
+  border-radius: 12px;
+  padding: 0;
+  margin: 0;
+  box-shadow: 0 4px 8px rgba(26, 35, 126, 0.1);
+  transition: box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.pack-panel:hover {
+  box-shadow: 0 6px 16px rgba(26, 35, 126, 0.15);
+}
+
+/* Pack panel header row (title + team inputs + delete button) */
+.pack-panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  user-select: none;
+}
+
+.pack-panel__header:hover .pack-panel__title {
+  text-decoration: underline;
+}
+
+/* Pack title label */
+.pack-panel__title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  flex: 0 0 auto;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pack-panel__title:hover {
+  text-decoration: underline;
+}
+
+/* Team name inputs container */
+.pack-panel__team-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  flex: 1;
+  align-items: center;
+}
+
+.pack-panel__team-inputs label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.pack-team1-input,
+.pack-team2-input {
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #ffffff;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: var(--text-primary);
+  max-width: 200px;
+}
+
+.pack-team1-input:focus,
+.pack-team2-input:focus {
+  outline: none;
+  border-color: var(--accent-yellow);
+  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.3);
+}
+
+/* Pack delete button */
+.pack-delete-btn {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 71, 87, 0.9);
+  color: #ffffff;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.pack-delete-btn:hover:not(:disabled) {
+  background: #e63946;
+  border-color: #ffffff;
+}
+
+.pack-delete-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Pack body (collapsible) */
+.pack-panel__body {
+  display: none;
+  padding: 1.5rem;
+  background: #f8f9fa;
+}
+
+.pack-panel.expanded .pack-panel__body {
+  display: block;
+}
+
+/* Sessions container within pack */
+.pack-sessions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+/* Pack score display */
+.pack-score-display {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  border: 2px solid #f0c419;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  font-size: 1rem;
+  color: #1a237e;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(255, 215, 0, 0.3);
+}
+
+.pack-score-display strong {
+  font-weight: 700;
+}
+
+/* Button container for pack actions */
+.pack-button-container {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.start-pack-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 3px 6px rgba(255, 107, 53, 0.3);
+}
+
+.start-pack-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 12px rgba(255, 107, 53, 0.4);
+  background: linear-gradient(135deg, #ff5722 0%, #ff8f00 100%);
 }
 
 /* Individual session card */
 .session-panel {
-  background: var(--loading);
-  border: 3px solid #e3f2fd;
-  border-radius: 12px;
+  background: #ffffff;
+  border: 2px solid #e3f2fd;
+  border-radius: 10px;
   padding: 1.25rem 1.5rem;
   margin: 0;
-  box-shadow: 0 3px 6px rgba(26, 35, 126, 0.08);
+  box-shadow: 0 2px 4px rgba(26, 35, 126, 0.06);
   transition: box-shadow 0.2s ease;
 }
 
 .session-panel:hover {
-  box-shadow: 0 4px 12px rgba(26, 35, 126, 0.12);
+  box-shadow: 0 3px 8px rgba(26, 35, 126, 0.1);
 }
 
 /* Session panel header row (title + delete button) */
@@ -131,9 +299,10 @@ input, textarea {
 
 /* Session title label */
 .session-panel__title {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
+  margin: 0;
 }
 
 /* Question input within a session panel */
@@ -162,6 +331,136 @@ input, textarea {
   min-width: 2rem;
   color: var(--text-secondary);
   font-size: 0.9rem;
+}
+
+/* Button styles for setup page */
+#add-pack-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 3px 6px rgba(102, 126, 234, 0.3);
+  margin-bottom: 1rem;
+}
+
+#add-pack-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 12px rgba(102, 126, 234, 0.4);
+}
+
+#add-pack-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--strike-inactive);
+  box-shadow: none;
+}
+
+.add-session-btn {
+  padding: 0.625rem 1.25rem;
+  background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+}
+
+.add-session-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.4);
+}
+
+.add-session-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--strike-inactive);
+  box-shadow: none;
+}
+
+.add-answer-btn {
+  padding: 0.5rem 1rem;
+  background: #3498db;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-answer-btn:hover:not(:disabled) {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+.add-answer-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--strike-inactive);
+}
+
+.session-delete-btn,
+.answer-delete-btn {
+  padding: 0.4rem 0.9rem;
+  background: transparent;
+  color: var(--strike-active);
+  border: 2px solid var(--strike-active);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.session-delete-btn:hover:not(:disabled),
+.answer-delete-btn:hover:not(:disabled) {
+  background: var(--strike-active);
+  color: #ffffff;
+}
+
+.session-delete-btn:disabled,
+.answer-delete-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--strike-inactive);
+  color: var(--strike-inactive);
+}
+
+/* Input styling for setup page */
+.session-question-input,
+.answer-row input[type="text"] {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 1rem;
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.session-question-input:focus,
+.answer-row input[type="text"]:focus {
+  outline: none;
+  border-color: var(--active-border);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.2);
+}
+
+/* Controls bar styling */
+#controls-bar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
 /* ==========================================================================
